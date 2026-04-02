@@ -20,7 +20,8 @@
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
             background: #1a1a2e;
             color: #e0e0e0;
-            min-height: 100vh;
+            height: 100vh;
+            overflow: hidden;
         }
         header {
             background: #16213e;
@@ -41,37 +42,41 @@
         .main {
             display: grid;
             grid-template-columns: 1fr 1fr;
-            gap: 16px;
-            padding: 16px;
+            gap: 12px;
+            padding: 12px;
             height: calc(100vh - 52px);
+            overflow: hidden;
         }
         .left-col {
             display: flex;
             flex-direction: column;
-            gap: 16px;
+            gap: 12px;
+            overflow: hidden;
         }
         .right-col {
             display: flex;
             flex-direction: column;
-            gap: 16px;
+            gap: 12px;
             overflow-y: auto;
         }
         .card {
             background: #16213e;
             border-radius: 8px;
-            padding: 16px;
+            padding: 12px;
             border: 1px solid #0f3460;
+            flex-shrink: 0;
         }
         .card h2 {
-            font-size: 14px; text-transform: uppercase; color: #e94560;
-            margin-bottom: 12px; letter-spacing: 1px;
+            font-size: 13px; text-transform: uppercase; color: #e94560;
+            margin-bottom: 8px; letter-spacing: 1px;
         }
         #viewer-card {
             flex: 1;
-            min-height: 400px;
+            min-height: 250px;
             position: relative;
             padding: 0;
             overflow: hidden;
+            flex-shrink: 1;
         }
         #viewer-card h2 {
             position: absolute; top: 12px; left: 16px; z-index: 10;
@@ -83,21 +88,26 @@
         #viewer3d {
             width: 100%; height: 100%; display: block;
         }
-        table { width: 100%; border-collapse: collapse; font-size: 13px; }
+        table { width: 100%; border-collapse: collapse; font-size: 13px; table-layout: fixed; }
         table th {
             text-align: left; padding: 6px 8px; color: #888;
             border-bottom: 1px solid #0f3460; font-weight: 500;
         }
+        table th:nth-child(1) { width: 38%; }
+        table th:nth-child(2) { width: 22%; }
+        table th:nth-child(3) { width: 20%; }
+        table th:nth-child(4) { width: 20%; }
         table td {
             padding: 6px 8px; border-bottom: 1px solid #0f346033;
             font-family: 'Courier New', monospace;
+            overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
         }
-        .tcp-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
+        .tcp-grid { display: grid; grid-template-columns: 1fr 1fr 1fr 1fr 1fr 1fr; gap: 6px; }
         .tcp-item {
-            background: #1a1a2e; padding: 10px; border-radius: 6px; text-align: center;
+            background: #1a1a2e; padding: 6px 4px; border-radius: 6px; text-align: center;
         }
-        .tcp-item .label { font-size: 11px; color: #888; margin-bottom: 4px; }
-        .tcp-item .value { font-size: 16px; font-family: 'Courier New', monospace; }
+        .tcp-item .label { font-size: 10px; color: #888; margin-bottom: 2px; }
+        .tcp-item .value { font-size: 14px; font-family: 'Courier New', monospace; }
         .controller-list { list-style: none; }
         .controller-list li {
             padding: 8px 12px; margin-bottom: 6px; background: #1a1a2e;
@@ -123,9 +133,9 @@
         .btn-secondary:hover { background: #1a4a80; }
         .btn-row { display: flex; gap: 8px; margin-top: 8px; }
         .log {
-            background: #0d0d1a; border-radius: 6px; padding: 8px 12px;
-            font-family: 'Courier New', monospace; font-size: 12px;
-            max-height: 100px; overflow-y: auto;
+            background: #0d0d1a; border-radius: 6px; padding: 6px 10px;
+            font-family: 'Courier New', monospace; font-size: 11px;
+            max-height: 80px; overflow-y: auto;
         }
         .log-entry { padding: 2px 0; color: #888; }
         .log-entry.error { color: #ff4444; }
@@ -161,7 +171,7 @@
             <div class="card">
                 <h2>Joint States</h2>
                 <table>
-                    <thead><tr><th>Joint</th><th>Position (°)</th><th>Velocity</th><th>Effort</th></tr></thead>
+                    <thead><tr><th>Joint</th><th>Position (°)</th><th>Velocity (rad/s)</th><th>Effort (Nm)</th></tr></thead>
                     <tbody id="joint-table"></tbody>
                 </table>
             </div>
@@ -524,10 +534,10 @@
                     effort: msg.effort?.[i] ?? 0,
                 };
                 html += `<tr>
-                    <td>${name}</td>
+                    <td>${name.replace('_joint','')}</td>
                     <td>${rad2deg(msg.position[i])}</td>
-                    <td>${(msg.velocity?.[i] ?? 0).toFixed(4)}</td>
-                    <td>${(msg.effort?.[i] ?? 0).toFixed(4)}</td>
+                    <td>${(msg.velocity?.[i] ?? 0).toFixed(3)}</td>
+                    <td>${(msg.effort?.[i] ?? 0).toFixed(2)}</td>
                 </tr>`;
             }
             tbody.innerHTML = html;
