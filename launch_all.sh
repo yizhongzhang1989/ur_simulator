@@ -32,10 +32,12 @@ sleep 2
 
 # Start Gazebo simulation (headless)
 echo "[2/3] Starting Gazebo simulation (headless)..."
+WORLD_FILE="$WS_DIR/src/ur_web_dashboard/worlds/no_ground_collision.sdf"
 ros2 launch ur_simulation_gz ur_sim_control.launch.py \
     ur_type:="$UR_TYPE" \
     gazebo_gui:=false \
-    launch_rviz:=false &
+    launch_rviz:=false \
+    world_file:="$WORLD_FILE" &
 SIM_PID=$!
 
 # Wait for simulation to be ready
