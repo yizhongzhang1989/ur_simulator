@@ -1,6 +1,7 @@
 # Controller configuration for effort (torque) mode.
-# Used when control_mode: effort in config.yaml.
-# Provides forward_effort_controller for external torque-based controllers (e.g. CRISP).
+# Used when --control_mode effort is passed to launch_all.sh.
+# Matches the official ur_simulation_gz controller set where applicable,
+# plus forward_effort_controller for external torque-based controllers (e.g. CRISP).
 
 controller_manager:
   ros__parameters:
@@ -11,6 +12,12 @@ controller_manager:
 
     joint_trajectory_controller:
       type: joint_trajectory_controller/JointTrajectoryController
+
+    forward_position_controller:
+      type: position_controllers/JointGroupPositionController
+
+    forward_velocity_controller:
+      type: velocity_controllers/JointGroupVelocityController
 
     forward_effort_controller:
       type: effort_controllers/JointGroupEffortController
@@ -36,6 +43,26 @@ joint_trajectory_controller:
     state_publish_rate: 100.0
     action_monitor_rate: 20.0
     allow_partial_joints_goal: false
+
+forward_position_controller:
+  ros__parameters:
+    joints:
+      - shoulder_pan_joint
+      - shoulder_lift_joint
+      - elbow_joint
+      - wrist_1_joint
+      - wrist_2_joint
+      - wrist_3_joint
+
+forward_velocity_controller:
+  ros__parameters:
+    joints:
+      - shoulder_pan_joint
+      - shoulder_lift_joint
+      - elbow_joint
+      - wrist_1_joint
+      - wrist_2_joint
+      - wrist_3_joint
 
 forward_effort_controller:
   ros__parameters:
