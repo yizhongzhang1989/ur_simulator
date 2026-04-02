@@ -289,6 +289,7 @@
         // 3D Viewer
         // ============================================================
         let scene, camera, renderer, controls;
+        let tcpAxes = null;
 
         function initViewer() {
             const canvas = document.getElementById('viewer3d');
@@ -388,6 +389,16 @@
 
                     scene.add(robot);
                     document.getElementById('viewer-loading').style.display = 'none';
+
+                    // Add TCP axes at tool0 frame
+                    const tool0 = robot.frames?.['tool0'] || robot.joints?.['tool0-fixedjoint'];
+                    if (tool0) {
+                        if (tcpAxes) tcpAxes.parent?.remove(tcpAxes);
+                        tcpAxes = new THREE.AxesHelper(0.1);
+                        tcpAxes.renderOrder = 999;
+                        tcpAxes.material.depthTest = false;
+                        tool0.add(tcpAxes);
+                    }
 
                     // Debug: log bounding box
                     const box = new THREE.Box3().setFromObject(robot);
