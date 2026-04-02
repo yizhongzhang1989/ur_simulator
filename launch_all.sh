@@ -62,15 +62,31 @@ source /opt/ros/humble/setup.bash
 source "$WS_DIR/install/setup.bash" 2>/dev/null || true
 
 # Kill any existing processes
-echo "[1/3] Cleaning up old processes..."
+echo "[1/4] Cleaning up old processes..."
 pkill -f "ign gazebo" 2>/dev/null || true
 pkill -f "parameter_bridge" 2>/dev/null || true
 pkill -f "robot_state_publisher" 2>/dev/null || true
 pkill -f "rosbridge_websocket" 2>/dev/null || true
 sleep 2
 
+# Generate static URDFs for the 3D viewer (if missing)
+URDF_DIR="$WS_DIR/src/ur_web_dashboard/urdf"
+XACRO_FILE="$WS_DIR/src/ur_description/urdf/ur.urdf.xacro"
+if [ ! -f "$URDF_DIR/$UR_TYPE.urdf" ]; then
+    echo "[2/4] Generating static URDFs for 3D viewer..."
+    mkdir -p "$URDF_DIR"
+    for ut in ur3 ur3e ur5 ur5e ur7e ur8long ur10 ur10e ur12e ur15 ur16e ur18 ur20 ur30; do
+        xacro "$XACRO_FILE" ur_type:="$ut" name:=ur 2>/dev/null \
+            | sed 's|package://ur_description/|../ur_description/|g' \
+            > "$URDF_DIR/${ut}.urdf"
+    done
+    echo "    Generated URDFs in $URDF_DIR/"
+else
+    echo "[2/4] Static URDFs already exist, skipping generation."
+fi
+
 # Start Gazebo simulation
-echo "[2/3] Starting Gazebo simulation..."
+echo "[3/4] Starting Gazebo simulation..."
 ros2 launch ur_simulation_gz ur_sim_control.launch.py \
     ur_type:="$UR_TYPE" \
     gazebo_gui:="$GAZEBO_GUI" \
@@ -89,7 +105,7 @@ for i in $(seq 1 30); do
 done
 
 # Start rosbridge WebSocket server
-echo "[3/3] Starting rosbridge WebSocket (port $ROSBRIDGE_PORT)..."
+echo "[4/4] Starting rosbridge WebSocket (port $ROSBRIDGE_PORT)..."
 ros2 launch rosbridge_server rosbridge_websocket_launch.xml port:="$ROSBRIDGE_PORT" &
 BRIDGE_PID=$!
 sleep 2
