@@ -30,14 +30,36 @@ pkill -f "robot_state_publisher" 2>/dev/null || true
 pkill -f "rosbridge_websocket" 2>/dev/null || true
 sleep 2
 
-# Start Gazebo simulation (headless)
+# Start Gazebo simulation (headless) with self-collision enabled
 echo "[2/3] Starting Gazebo simulation (headless)..."
 WORLD_FILE="$WS_DIR/src/ur_web_dashboard/worlds/no_ground_collision.sdf"
+
+# Create a wrapper xacro that adds self-collision tags
+UR_DESC_DIR="$(ros2 pkg prefix ur_description)/share/ur_description"
+WRAPPER_XACRO="/tmp/ur_self_collide.urdf.xacro"
+cat > "$WRAPPER_XACRO" << 'XACRO_EOF'
+<?xml version="1.0"?>
+<robot xmlns:xacro="http://wiki.ros.org/xacro" name="ur">
+  <xacro:include filename="$(find ur_description)/urdf/ur.urdf.xacro" />
+  <gazebo reference="base_link_inertia"><self_collide>true</self_collide></gazebo>
+  <gazebo reference="shoulder_link"><self_collide>true</self_collide></gazebo>
+  <gazebo reference="upper_arm_link"><self_collide>true</self_collide></gazebo>
+  <gazebo reference="forearm_link"><self_collide>true</self_collide></gazebo>
+  <gazebo reference="wrist_1_link"><self_collide>true</self_collide></gazebo>
+  <gazebo reference="wrist_2_link"><self_collide>true</self_collide></gazebo>
+  <gazebo reference="wrist_3_link"><self_collide>true</self_collide></gazebo>
+</robot>
+XACRO_EOF
+# Symlink into ur_description so FindPackageShare can find it
+ln -sf "$WRAPPER_XACRO" "$UR_DESC_DIR/urdf/ur_self_collide.urdf.xacro" 2>/dev/null || \
+  cp "$WRAPPER_XACRO" "$UR_DESC_DIR/urdf/ur_self_collide.urdf.xacro"
+
 ros2 launch ur_simulation_gz ur_sim_control.launch.py \
     ur_type:="$UR_TYPE" \
     gazebo_gui:=false \
     launch_rviz:=false \
-    world_file:="$WORLD_FILE" &
+    world_file:="$WORLD_FILE" \
+    description_file:=ur_self_collide.urdf.xacro &
 SIM_PID=$!
 
 # Wait for simulation to be ready
