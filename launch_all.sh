@@ -12,9 +12,6 @@
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-set -e
-
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 WS_DIR="$SCRIPT_DIR"
 
 # Default values
@@ -72,6 +69,19 @@ if [[ "$WORLD_FILE_CFG" == /* ]]; then
 else
     WORLD_FILE="$WS_DIR/src/ur_web_dashboard/worlds/${WORLD_FILE_CFG:-no_ground_collision.sdf}"
 fi
+
+echo "=== UR Robot Simulator ==="
+echo "Config:       $CONFIG_FILE"
+echo "Robot type:   $UR_TYPE"
+echo "Control mode: $CONTROL_MODE"
+echo "Gazebo GUI:   $GAZEBO_GUI"
+echo "World:        $WORLD_FILE"
+echo "Ports:        dashboard=$DASHBOARD_PORT, rosbridge=$ROSBRIDGE_PORT"
+echo ""
+
+# Source ROS and workspace
+source /opt/ros/humble/setup.bash
+source "$WS_DIR/install/setup.bash" 2>/dev/null || true
 
 # Kill any existing processes
 echo "[1/4] Cleaning up old processes..."

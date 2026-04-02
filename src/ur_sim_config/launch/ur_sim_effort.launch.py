@@ -155,6 +155,18 @@ def launch_setup(context, *args, **kwargs):
         arguments=["forward_effort_controller", "-c", "/controller_manager"],
     )
 
+    # Spawn additional controllers as inactive (available for runtime switching)
+    forward_position_controller_spawner = Node(
+        package="controller_manager",
+        executable="spawner",
+        arguments=["forward_position_controller", "-c", "/controller_manager", "--inactive"],
+    )
+    forward_velocity_controller_spawner = Node(
+        package="controller_manager",
+        executable="spawner",
+        arguments=["forward_velocity_controller", "-c", "/controller_manager", "--inactive"],
+    )
+
     # Gravity compensation node — mimics real UR internal gravity comp.
     # Starts after forward_effort_controller is ready.
     gravity_compensation_node = Node(
@@ -183,6 +195,8 @@ def launch_setup(context, *args, **kwargs):
         gz_launch_description_without_gui,
         gz_sim_bridge,
         effort_controller_spawner,
+        forward_position_controller_spawner,
+        forward_velocity_controller_spawner,
         delay_gravity_comp_after_effort_controller,
     ]
 

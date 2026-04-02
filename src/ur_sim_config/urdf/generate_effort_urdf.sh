@@ -25,4 +25,10 @@ xacro "$(ros2 pkg prefix ur_description)/share/ur_description/urdf/ur.urdf.xacro
   }' \
   | sed 's|<plugin>ign_ros2_control/IgnitionSystem</plugin>|<plugin>ign_ros2_control/IgnitionSystem</plugin>\n      <param name="position_proportional_gain">5000</param>|' \
   | sed 's|effort="\([0-9.]*\)"|effort="500"|g' \
+  | sed '/<joint name="shoulder_pan_joint"/,/<\/joint>/ s|<dynamics damping="0" friction="0"/>|<dynamics damping="10" friction="5"/>|' \
+  | sed '/<joint name="shoulder_lift_joint"/,/<\/joint>/ s|<dynamics damping="0" friction="0"/>|<dynamics damping="10" friction="5"/>|' \
+  | sed '/<joint name="elbow_joint"/,/<\/joint>/ s|<dynamics damping="0" friction="0"/>|<dynamics damping="10" friction="5"/>|' \
+  | sed '/<joint name="wrist_1_joint"/,/<\/joint>/ s|<dynamics damping="0" friction="0"/>|<dynamics damping="3" friction="1"/>|' \
+  | sed '/<joint name="wrist_2_joint"/,/<\/joint>/ s|<dynamics damping="0" friction="0"/>|<dynamics damping="3" friction="1"/>|' \
+  | sed '/<joint name="wrist_3_joint"/,/<\/joint>/ s|<dynamics damping="0" friction="0"/>|<dynamics damping="3" friction="1"/>|' \
   > "$OUTPUT"

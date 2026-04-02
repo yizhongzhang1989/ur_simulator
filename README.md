@@ -130,6 +130,7 @@ Usage: `./launch_all.sh` (default config) or `./launch_all.sh [--control_mode po
   - Trajectory execution via `/joint_trajectory_controller/joint_trajectory` topic
     (same topic as position mode — web dashboard jogging works in both modes)
   - Effort clamping to safe joint limits (150 Nm base, 28 Nm wrist)
+  - Joint friction and damping in physics (simulates reduction gear friction)
 - External controllers publish torques on `/external_effort_commands` (6-element `Float64MultiArray`).
   These are **added** on top of gravity compensation, matching real UR behavior.
 - The robot starts at the same home position as position mode
@@ -147,14 +148,18 @@ ros2 topic pub /external_effort_commands std_msgs/msg/Float64MultiArray \
 ## Manual launch (advanced)
 
 ```bash
-# Terminal 1: Simulation
+# Position mode:
 source install/setup.bash
 ros2 launch ur_simulation_gz ur_sim_control.launch.py gazebo_gui:=false launch_rviz:=false
 
-# Terminal 2: rosbridge
+# Effort mode:
+source install/setup.bash
+ros2 launch ur_sim_config ur_sim_effort.launch.py ur_type:=ur5e gazebo_gui:=false launch_rviz:=false
+
+# rosbridge (separate terminal)
 ros2 launch rosbridge_server rosbridge_websocket_launch.xml
 
-# Terminal 3: Web dashboard (use server.py to serve meshes correctly)
+# Web dashboard (separate terminal)
 cd src/ur_web_dashboard && python3 server.py 8080
 ```
 
@@ -162,8 +167,8 @@ cd src/ur_web_dashboard && python3 server.py 8080
 
 | Feature | Description |
 |---|---|
-| 3D viewer | Interactive Three.js robot model with orbit controls |
-| Joint states | Real-time position (°), velocity, effort |
+| 3D viewer | Interactive Three.js robot model with orbit controls, TCP axes |
+| Joint states | Real-time position (°), velocity (rad/s), effort (Nm) |
 | TCP pose | End-effector X/Y/Z + Roll/Pitch/Yaw (computed from 3D FK) |
 | Robot type | Auto-detected from URDF (shown in header) |
 | Controllers | Active/inactive status |
