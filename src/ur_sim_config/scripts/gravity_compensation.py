@@ -103,18 +103,18 @@ class GravityCompensation(Node):
         self.traj_active = False
 
         # Per-joint PID gains for position hold (mimics real UR servo stiffness)
-        # Higher gains for heavy base joints, lower for light wrist joints
-        self.kp = [1500.0, 1500.0, 1500.0, 100.0, 100.0, 100.0]
-        self.ki = [50.0,   50.0,   50.0,   20.0,  20.0,  20.0]
-        self.kd = [80.0,   80.0,   80.0,   10.0,  10.0,  10.0]
+        # Pinocchio handles gravity accurately, so PID only corrects residual error
+        self.kp = [100.0, 100.0, 100.0, 20.0, 20.0, 20.0]
+        self.ki = [10.0,  10.0,  10.0,  5.0,  5.0,  5.0]
+        self.kd = [20.0,  20.0,  20.0,  3.0,  3.0,  3.0]
 
-        # Per-joint effort limits (sim limits — slightly above real UR for
-        # startup recovery; real HW: base=150, wrist=28)
-        self.effort_limits = [150.0, 150.0, 150.0, 56.0, 56.0, 56.0]
+        # Per-joint effort limits (matching real UR hardware)
+        self.effort_limits = [150.0, 150.0, 150.0, 28.0, 28.0, 28.0]
 
         # Integral error accumulator
         self.integral_error = [0.0] * self.n_joints
-        self.integral_limit = 50.0  # Anti-windup clamp
+        self.integral_limit = 20.0  # Anti-windup clamp
+        self.dt = 0.002  # 500 Hz control rate
 
         # Subscribers
         self.create_subscription(
@@ -138,17 +138,22 @@ class GravityCompensation(Node):
             Float64MultiArray, "/forward_effort_controller/commands", 10
         )
 
-        # Publish at 1000 Hz to match Gazebo simulation rate
-        self.create_timer(0.001, self._publish_torques)
-        self.get_logger().info("Gravity compensation active (1000 Hz)")
+        # Publish at 500 Hz
+        self.create_timer(self.dt, self._publish_torques)
+        self.get_logger().info("Gravity compensation active (500 Hz)")
 
     def _joint_state_cb(self, msg):
+        alpha = 0.3  # low-pass filter coefficient for velocity
         for i, name in enumerate(JOINT_NAMES):
             if name in msg.name:
                 idx = msg.name.index(name)
                 self.joint_positions[i] = msg.position[idx]
                 if idx < len(msg.velocity):
-                    self.joint_velocities[i] = msg.velocity[idx]
+                    # Low-pass filter on velocity to reduce noise
+                    raw_vel = msg.velocity[idx]
+                    self.joint_velocities[i] = (
+                        alpha * raw_vel + (1.0 - alpha) * self.joint_velocities[i]
+                    )
         self.got_joint_states = True
 
     def _external_torque_cb(self, msg):
@@ -244,15 +249,19 @@ class GravityCompensation(Node):
         msg = Float64MultiArray()
         torques = []
         for i in range(self.n_joints):
-            tau = gravity_torques[i] + self.external_torques[i]
-            # Add PID position hold + damping (always active, like real UR servo)
+            # PID position hold (only corrects residual, gravity is from Pinocchio)
             pos_error = self.hold_positions[i] - self.joint_positions[i]
-            self.integral_error[i] += pos_error * 0.001  # dt = 1ms
+            self.integral_error[i] += pos_error * self.dt  # integrate
             self.integral_error[i] = max(-self.integral_limit,
                                          min(self.integral_limit, self.integral_error[i]))
-            tau += (self.kp[i] * pos_error
-                    + self.ki[i] * self.integral_error[i]
-                    - self.kd[i] * self.joint_velocities[i])
+            pid_tau = (self.kp[i] * pos_error
+                       + self.ki[i] * self.integral_error[i]
+                       - self.kd[i] * self.joint_velocities[i])
+            # Clamp PID contribution to prevent spikes
+            pid_limit = self.effort_limits[i] * 0.5
+            pid_tau = max(-pid_limit, min(pid_limit, pid_tau))
+
+            tau = gravity_torques[i] + self.external_torques[i] + pid_tau
             # Clamp to effort limits (matching real UR hardware)
             tau = max(-self.effort_limits[i], min(self.effort_limits[i], tau))
             torques.append(tau)
