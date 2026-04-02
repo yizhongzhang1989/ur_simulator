@@ -1,0 +1,16 @@
+<?xml version="1.0"?>
+<!-- Wrapper xacro: includes the standard UR URDF and enables self-collision on all links. -->
+<robot xmlns:xacro="http://wiki.ros.org/xacro" name="$(arg name)">
+
+  <xacro:include filename="$(find ur_description)/urdf/ur.urdf.xacro" />
+
+  <!-- Enable self-collision on all movable robot links -->
+  <gazebo reference="base_link_inertia"><self_collide>true</self_collide></gazebo>
+  <gazebo reference="shoulder_link"><self_collide>true</self_collide></gazebo>
+  <gazebo reference="upper_arm_link"><self_collide>true</self_collide></gazebo>
+  <gazebo reference="forearm_link"><self_collide>true</self_collide></gazebo>
+  <gazebo reference="wrist_1_link"><self_collide>true</self_collide></gazebo>
+  <gazebo reference="wrist_2_link"><self_collide>true</self_collide></gazebo>
+  <gazebo reference="wrist_3_link"><self_collide>true</self_collide></gazebo>
+
+</robot>
