@@ -1,0 +1,18 @@
+<?xml version="1.0"?>
+<package format="3">
+  <name>ur_sim_config</name>
+  <version>0.1.0</version>
+  <description>UR simulator configuration overrides (effort interface, custom worlds)</description>
+  <maintainer email="yizhongzhang1989@gmail.com">yizhongzhang</maintainer>
+  <license>MIT</license>
+  <buildtool_depend>ament_cmake</buildtool_depend>
+  <depend>ur_description</depend>
+  <exec_depend>rclpy</exec_depend>
+  <exec_depend>sensor_msgs</exec_depend>
+  <exec_depend>std_msgs</exec_depend>
+  <exec_depend>urdf_parser_py</exec_depend>
+  <exec_depend>python_orocos_kdl_vendor</exec_depend>
+  <export>
+    <build_type>ament_cmake</build_type>
+  </export>
+</package>

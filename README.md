@@ -83,9 +83,60 @@ rosbridge_port: 9090           # rosbridge WebSocket port
 dashboard_port: 8080           # Web dashboard HTTP port
 ```
 
-Usage: `./launch_all.sh` (default config) or `./launch_all.sh path/to/config.yaml`
 
-### Manual launch (step by step)
+## Launch Modes: Position vs Effort
+
+You can select the robot control mode at launch time using the `--control_mode` flag:
+
+```bash
+# Position mode (default, robust position control)
+./launch_all.sh --control_mode position
+
+# Effort mode (for external torque-based controllers, e.g. CRISP)
+./launch_all.sh --control_mode effort
+
+# You can also specify a config file:
+./launch_all.sh --control_mode effort path/to/config.yaml
+```
+
+If no flag is given, position mode is used by default. See below for details on each mode.
+
+---
+
+Usage: `./launch_all.sh` (default config) or `./launch_all.sh [--control_mode position|effort] [path/to/config.yaml]`
+
+
+## Control Modes Explained
+
+### Position Mode (default)
+
+- Launches the simulation with robust position control using the `joint_trajectory_controller`.
+- Effort (torque) commands are **not** available.
+- Use this mode for most applications, including web dashboard jogging and trajectory following.
+
+### Effort Mode (for CRISP/external controllers)
+
+- Launches the simulation with **effort (torque) command interfaces** enabled on all joints.
+- Required for external torque-based controllers (e.g. CRISP).
+- **Built-in gravity compensation** — just like a real UR robot, gravity is compensated
+  at the simulation level. When zero external torque is commanded, the robot holds its position.
+- A `gravity_compensation` node runs automatically, providing:
+  - KDL-based gravity torque computation
+  - PID position hold (mimics the real UR internal servo)
+  - Effort clamping to safe joint limits
+- External controllers publish torques on `/external_effort_commands` (6-element `Float64MultiArray`).
+  These are **added** on top of gravity compensation, matching real UR behavior.
+
+```bash
+# Example: send external torques from another node
+ros2 topic pub /external_effort_commands std_msgs/msg/Float64MultiArray \
+  "{data: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]}"
+```
+
+---
+
+
+## Manual launch (advanced)
 
 ```bash
 # Terminal 1: Simulation
