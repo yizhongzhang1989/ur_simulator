@@ -335,8 +335,10 @@
             ground.receiveShadow = true;
             scene.add(ground);
 
-            // Axes
-            scene.add(new THREE.AxesHelper(0.3));
+            // Axes (ROS Z-up convention: rotate from Three.js Y-up)
+            const worldAxes = new THREE.AxesHelper(0.3);
+            worldAxes.rotation.x = -Math.PI / 2;
+            scene.add(worldAxes);
 
             // Resize handling
             const ro = new ResizeObserver(() => {
