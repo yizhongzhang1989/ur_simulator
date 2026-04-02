@@ -65,7 +65,7 @@ echo "Press Ctrl+C to stop all services."
 echo ""
 
 cd "$WS_DIR/src/ur_web_dashboard"
-python3 -m http.server 8080 &
+python3 server.py 8080 &
 WEB_PID=$!
 
 # Cleanup on exit
