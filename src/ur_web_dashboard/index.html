@@ -383,6 +383,34 @@
                     urdfRobot.setJointValue(name, val);
                 }
             });
+            updateTCPFromModel();
+        }
+
+        function updateTCPFromModel() {
+            if (!urdfRobot) return;
+            // Find the tool0 frame in the URDF model
+            const tool0 = urdfRobot.frames['tool0'] || urdfRobot.joints['tool0-fixedjoint'];
+            if (!tool0) return;
+
+            const worldPos = new THREE.Vector3();
+            const worldQuat = new THREE.Quaternion();
+            tool0.getWorldPosition(worldPos);
+            tool0.getWorldQuaternion(worldQuat);
+
+            // Convert from Three.js Y-up back to ROS Z-up for display
+            // Our robot has rotation.x = -PI/2, so we undo that for the displayed values
+            const rosPos = new THREE.Vector3(worldPos.x, -worldPos.z, worldPos.y);
+            const undoRot = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), Math.PI / 2);
+            const rosQuat = undoRot.multiply(worldQuat);
+
+            document.getElementById('tcp-x').textContent = rosPos.x.toFixed(4);
+            document.getElementById('tcp-y').textContent = rosPos.y.toFixed(4);
+            document.getElementById('tcp-z').textContent = rosPos.z.toFixed(4);
+
+            const euler = new THREE.Euler().setFromQuaternion(rosQuat, 'XYZ');
+            document.getElementById('tcp-roll').textContent = rad2deg(euler.x);
+            document.getElementById('tcp-pitch').textContent = rad2deg(euler.y);
+            document.getElementById('tcp-yaw').textContent = rad2deg(euler.z);
         }
 
         // ============================================================
@@ -451,7 +479,6 @@
 
         function subscribe() {
             send({ op: 'subscribe', topic: '/joint_states', type: 'sensor_msgs/msg/JointState', throttle_rate: 100 });
-            send({ op: 'subscribe', topic: '/tf', type: 'tf2_msgs/msg/TFMessage', throttle_rate: 200 });
             send({ op: 'subscribe', topic: '/clock', type: 'rosgraph_msgs/msg/Clock', throttle_rate: 500 });
             pollControllers();
             setInterval(pollControllers, 5000);
@@ -464,7 +491,6 @@
         // ============================================================
         function handleTopic(topic, msg) {
             if (topic === '/joint_states') updateJointStates(msg);
-            else if (topic === '/tf') updateTCP(msg);
             else if (topic === '/clock') updateClock(msg);
         }
 
@@ -487,22 +513,6 @@
             }
             tbody.innerHTML = html;
             updateRobot3D();
-        }
-
-        function updateTCP(msg) {
-            for (const tf of msg.transforms) {
-                if (tf.child_frame_id === 'tool0') {
-                    const t = tf.transform.translation;
-                    const r = tf.transform.rotation;
-                    document.getElementById('tcp-x').textContent = t.x.toFixed(4);
-                    document.getElementById('tcp-y').textContent = t.y.toFixed(4);
-                    document.getElementById('tcp-z').textContent = t.z.toFixed(4);
-                    const euler = quatToEuler(r);
-                    document.getElementById('tcp-roll').textContent = rad2deg(euler.roll);
-                    document.getElementById('tcp-pitch').textContent = rad2deg(euler.pitch);
-                    document.getElementById('tcp-yaw').textContent = rad2deg(euler.yaw);
-                }
-            }
         }
 
         function updateClock(msg) {
