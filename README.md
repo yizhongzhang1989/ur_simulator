@@ -6,6 +6,7 @@ A ROS 2 simulation environment for Universal Robots (UR3, UR5e, UR10e, UR16e, UR
 
 - **Gazebo Ignition Fortress** physics simulation (headless supported)
 - **ros2_control** integration with `joint_trajectory_controller`
+- **Effort (torque) mode** with Pinocchio gravity compensation for external controllers (e.g. CRISP)
 - **3D visualization** of the robot in the browser (Three.js + urdf-loader)
 - **Web dashboard** for real-time monitoring and joint jogging
 - **TCP pose** computed via forward kinematics from the 3D model
@@ -20,6 +21,7 @@ A ROS 2 simulation environment for Universal Robots (UR3, UR5e, UR10e, UR16e, UR
 - Ubuntu 22.04
 - ROS 2 Humble
 - Gazebo Fortress (`ros-humble-ros-gz`)
+- Pinocchio (`ros-humble-pinocchio`) — required for effort mode gravity compensation
 
 ## Quick Start
 
@@ -39,6 +41,7 @@ sudo apt-get install -y \
   ros-humble-ur-description \
   ros-humble-ros2-control \
   ros-humble-ros2-controllers \
+  ros-humble-pinocchio \
   ros-humble-moveit \
   ros-humble-ur-moveit-config \
   ros-humble-rosbridge-suite
@@ -119,13 +122,18 @@ Usage: `./launch_all.sh` (default config) or `./launch_all.sh [--control_mode po
 - Launches the simulation with **effort (torque) command interfaces** enabled on all joints.
 - Required for external torque-based controllers (e.g. CRISP).
 - **Built-in gravity compensation** — just like a real UR robot, gravity is compensated
-  at the simulation level. When zero external torque is commanded, the robot holds its position.
+  at the simulation level using **Pinocchio** rigid body dynamics.
+  When zero external torque is commanded, the robot holds its position.
 - A `gravity_compensation` node runs automatically, providing:
-  - KDL-based gravity torque computation
-  - PID position hold (mimics the real UR internal servo)
-  - Effort clamping to safe joint limits
+  - Pinocchio-based gravity torque computation (accurate for all UR models)
+  - PID position hold with velocity filtering (mimics the real UR internal servo)
+  - Trajectory execution via `/joint_trajectory_controller/joint_trajectory` topic
+    (same topic as position mode — web dashboard jogging works in both modes)
+  - Effort clamping to safe joint limits (150 Nm base, 28 Nm wrist)
 - External controllers publish torques on `/external_effort_commands` (6-element `Float64MultiArray`).
   These are **added** on top of gravity compensation, matching real UR behavior.
+- The robot starts at the same home position as position mode
+  (`shoulder_lift=-90°`, `wrist_1=-90°`, all others `0°`).
 
 ```bash
 # Example: send external torques from another node
@@ -177,6 +185,11 @@ Browser <--:9090--> rosbridge_websocket <--ROS 2--> Gazebo Ignition
 │   ├── config.template.yaml       # Configuration template (tracked)
 │   └── config.yaml                # User config (gitignored, auto-generated)
 ├── src/
+│   ├── ur_sim_config/             # Effort mode config, gravity compensation
+│   │   ├── scripts/gravity_compensation.py  # Pinocchio gravity comp + PID node
+│   │   ├── config/ur_effort_controllers.yaml
+│   │   ├── launch/ur_sim_effort.launch.py
+│   │   └── urdf/generate_effort_urdf.sh
 │   ├── ur_simulation_gz/          # Git submodule: UR Gazebo simulation
 │   ├── ur_description/            # Git submodule: UR URDF + meshes
 │   └── ur_web_dashboard/          # Web dashboard
