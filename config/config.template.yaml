@@ -1,0 +1,19 @@
+# UR Simulator Configuration Template
+# Copy this file to config.yaml and modify as needed.
+# launch_all.sh reads config.yaml at startup.
+
+# --- Robot ---
+ur_type: ur5e                  # ur3, ur5, ur10, ur3e, ur5e, ur10e, ur16e, ur20, ur30
+
+# --- Simulation ---
+gazebo_gui: false              # true to show Gazebo GUI (requires X display)
+launch_rviz: false             # true to launch RViz (requires X display)
+world_file: no_ground_collision.sdf   # SDF world file (relative to worlds/ dir, or absolute path)
+physics_step_size: 0.001       # Gazebo physics step size in seconds
+
+# --- Networking ---
+rosbridge_port: 9090           # rosbridge WebSocket port
+dashboard_port: 8080           # Web dashboard HTTP port
+
+# --- Dashboard ---
+rosbridge_url: ""              # Override rosbridge URL for dashboard (default: ws://<host>:rosbridge_port)

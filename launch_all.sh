@@ -1,21 +1,60 @@
 #!/bin/bash
 # Launch the full UR simulation stack:
 # 1. Gazebo simulation (headless)
-# 2. rosbridge WebSocket server (port 9090)
-# 3. Web dashboard (port 8080)
+# 2. rosbridge WebSocket server
+# 3. Web dashboard
 #
-# Usage: ./launch_all.sh [ur_type]
-#   ur_type: ur3, ur5, ur5e (default), ur10e, ur16e, ur20, ur30
+# Usage: ./launch_all.sh [config_file]
+#   config_file: path to config YAML (default: config/config.yaml)
 
 set -e
 
-UR_TYPE="${1:-ur5e}"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 WS_DIR="$SCRIPT_DIR"
+CONFIG_FILE="${1:-$WS_DIR/config/config.yaml}"
+
+# Generate config from template if it doesn't exist
+if [ ! -f "$CONFIG_FILE" ]; then
+    echo "Config not found: $CONFIG_FILE"
+    echo "Generating from template..."
+    cp "$WS_DIR/config/config.template.yaml" "$CONFIG_FILE"
+    echo "Created $CONFIG_FILE — edit it to customize settings."
+fi
+
+# Parse YAML config (simple key: value parser)
+parse_yaml() {
+    local key="$1"
+    grep "^${key}:" "$CONFIG_FILE" | sed "s/^${key}:[[:space:]]*//" | sed 's/[[:space:]]*#.*//' | tr -d '"'
+}
+
+UR_TYPE="$(parse_yaml ur_type)"
+GAZEBO_GUI="$(parse_yaml gazebo_gui)"
+LAUNCH_RVIZ="$(parse_yaml launch_rviz)"
+WORLD_FILE_CFG="$(parse_yaml world_file)"
+ROSBRIDGE_PORT="$(parse_yaml rosbridge_port)"
+DASHBOARD_PORT="$(parse_yaml dashboard_port)"
+ROSBRIDGE_URL="$(parse_yaml rosbridge_url)"
+
+# Defaults
+UR_TYPE="${UR_TYPE:-ur5e}"
+GAZEBO_GUI="${GAZEBO_GUI:-false}"
+LAUNCH_RVIZ="${LAUNCH_RVIZ:-false}"
+ROSBRIDGE_PORT="${ROSBRIDGE_PORT:-9090}"
+DASHBOARD_PORT="${DASHBOARD_PORT:-8080}"
+
+# Resolve world file path
+if [[ "$WORLD_FILE_CFG" == /* ]]; then
+    WORLD_FILE="$WORLD_FILE_CFG"
+else
+    WORLD_FILE="$WS_DIR/src/ur_web_dashboard/worlds/${WORLD_FILE_CFG:-no_ground_collision.sdf}"
+fi
 
 echo "=== UR Robot Simulator ==="
+echo "Config:     $CONFIG_FILE"
 echo "Robot type: $UR_TYPE"
-echo "Workspace: $WS_DIR"
+echo "Gazebo GUI: $GAZEBO_GUI"
+echo "World:      $WORLD_FILE"
+echo "Ports:      dashboard=$DASHBOARD_PORT, rosbridge=$ROSBRIDGE_PORT"
 echo ""
 
 # Source ROS and workspace
@@ -30,13 +69,12 @@ pkill -f "robot_state_publisher" 2>/dev/null || true
 pkill -f "rosbridge_websocket" 2>/dev/null || true
 sleep 2
 
-# Start Gazebo simulation (headless)
-echo "[2/3] Starting Gazebo simulation (headless)..."
-WORLD_FILE="$WS_DIR/src/ur_web_dashboard/worlds/no_ground_collision.sdf"
+# Start Gazebo simulation
+echo "[2/3] Starting Gazebo simulation..."
 ros2 launch ur_simulation_gz ur_sim_control.launch.py \
     ur_type:="$UR_TYPE" \
-    gazebo_gui:=false \
-    launch_rviz:=false \
+    gazebo_gui:="$GAZEBO_GUI" \
+    launch_rviz:="$LAUNCH_RVIZ" \
     world_file:="$WORLD_FILE" &
 SIM_PID=$!
 
@@ -51,23 +89,23 @@ for i in $(seq 1 30); do
 done
 
 # Start rosbridge WebSocket server
-echo "[3/3] Starting rosbridge WebSocket (port 9090)..."
-ros2 launch rosbridge_server rosbridge_websocket_launch.xml &
+echo "[3/3] Starting rosbridge WebSocket (port $ROSBRIDGE_PORT)..."
+ros2 launch rosbridge_server rosbridge_websocket_launch.xml port:="$ROSBRIDGE_PORT" &
 BRIDGE_PID=$!
 sleep 2
 
 # Start web server
 echo ""
-echo "=== Starting web dashboard on port 8080 ==="
+echo "=== Starting web dashboard on port $DASHBOARD_PORT ==="
 echo ""
-echo "Open in browser: http://localhost:8080"
-echo "rosbridge WebSocket: ws://localhost:9090"
+echo "Open in browser: http://localhost:$DASHBOARD_PORT"
+echo "rosbridge WebSocket: ws://localhost:$ROSBRIDGE_PORT"
 echo ""
 echo "Press Ctrl+C to stop all services."
 echo ""
 
 cd "$WS_DIR/src/ur_web_dashboard"
-python3 server.py 8080 &
+python3 server.py "$DASHBOARD_PORT" &
 WEB_PID=$!
 
 # Cleanup on exit

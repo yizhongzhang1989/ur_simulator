@@ -6,6 +6,9 @@
 # Generated URDFs (regenerate with generate_urdf.sh)
 src/ur_web_dashboard/urdf/
 
+# User config (generated from template)
+config/config.yaml
+
 # Python
 __pycache__/
 *.pyc
