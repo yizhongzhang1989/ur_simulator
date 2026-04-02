@@ -7,22 +7,26 @@ its position. External controllers (e.g. CRISP) can publish additional
 torques on /external_effort_commands that get summed with gravity compensation
 before being sent to the forward_effort_controller.
 
+Uses Pinocchio for rigid body dynamics (gravity torque computation).
+
 This node:
   1. Subscribes to /joint_states for current joint positions
-  2. Computes gravity torques using KDL dynamics
+  2. Computes gravity torques using Pinocchio
   3. Subscribes to /external_effort_commands for additional torques
-  4. Publishes (gravity + external) to /forward_effort_controller/commands
+  4. Subscribes to /joint_trajectory_controller/joint_trajectory for motion
+  5. Publishes (gravity + PID + external) to /forward_effort_controller/commands
 """
+
+import tempfile
+import os
 
 import rclpy
 from rclpy.node import Node
 from sensor_msgs.msg import JointState
 from std_msgs.msg import Float64MultiArray
 from trajectory_msgs.msg import JointTrajectory
-import PyKDL
-from urdf_parser_py.urdf import URDF
+import pinocchio
 import numpy as np
-import math
 
 
 JOINT_NAMES = [
@@ -38,95 +42,11 @@ JOINT_NAMES = [
 HOME_POSITIONS = [0.0, -1.57, 0.0, -1.57, 0.0, 0.0]
 
 
-def urdf_pose_to_kdl_frame(pose):
-    """Convert a URDF pose to a KDL Frame."""
-    if pose is None:
-        return PyKDL.Frame()
-    pos = pose.xyz if pose.xyz else [0, 0, 0]
-    rot = pose.rpy if pose.rpy else [0, 0, 0]
-    return PyKDL.Frame(
-        PyKDL.Rotation.RPY(rot[0], rot[1], rot[2]),
-        PyKDL.Vector(pos[0], pos[1], pos[2]),
-    )
-
-
-def urdf_inertial_to_kdl(inertial):
-    """Convert URDF inertial to KDL RigidBodyInertia."""
-    if inertial is None:
-        return PyKDL.RigidBodyInertia()
-    origin = urdf_pose_to_kdl_frame(inertial.origin)
-    mass = inertial.mass if inertial.mass else 0.0
-    inertia = inertial.inertia
-    if inertia is None:
-        return PyKDL.RigidBodyInertia(mass, origin.p)
-    return PyKDL.RigidBodyInertia(
-        mass,
-        origin.p,
-        PyKDL.RotationalInertia(
-            inertia.ixx, inertia.iyy, inertia.izz,
-            inertia.ixy, inertia.ixz, inertia.iyz,
-        ),
-    )
-
-
-def build_kdl_chain(urdf_str, base_link, tip_link):
-    """Build a KDL chain from URDF string between base_link and tip_link."""
-    robot = URDF.from_xml_string(urdf_str)
-
-    # Build parent map: child_link -> (joint, parent_link)
-    parent_map = {}
-    for j in robot.joints:
-        parent_map[j.child] = (j, j.parent)
-
-    # Walk from tip to base to find the chain links/joints
-    chain_joints = []
-    current = tip_link
-    while current != base_link:
-        if current not in parent_map:
-            raise ValueError(f"Cannot find chain from {base_link} to {tip_link}")
-        joint, parent = parent_map[current]
-        chain_joints.append((joint, current))
-        current = parent
-    chain_joints.reverse()
-
-    # Build KDL chain
-    chain = PyKDL.Chain()
-    for joint, child_link_name in chain_joints:
-        frame = urdf_pose_to_kdl_frame(joint.origin)
-        child_link = robot.link_map[child_link_name]
-        inertia = urdf_inertial_to_kdl(child_link.inertial)
-
-        if joint.type == "revolute" or joint.type == "continuous":
-            axis = joint.axis if joint.axis else [0, 0, 1]
-            kdl_joint = PyKDL.Joint(
-                joint.name,
-                PyKDL.Vector(0, 0, 0),
-                PyKDL.Vector(axis[0], axis[1], axis[2]),
-                PyKDL.Joint.RotAxis,
-            )
-        elif joint.type == "prismatic":
-            axis = joint.axis if joint.axis else [0, 0, 1]
-            kdl_joint = PyKDL.Joint(
-                joint.name,
-                PyKDL.Vector(0, 0, 0),
-                PyKDL.Vector(axis[0], axis[1], axis[2]),
-                PyKDL.Joint.TransAxis,
-            )
-        else:
-            # Fixed joint
-            kdl_joint = PyKDL.Joint(joint.name, PyKDL.Joint.Fixed)
-
-        segment = PyKDL.Segment(child_link_name, kdl_joint, frame, inertia)
-        chain.addSegment(segment)
-
-    return chain
-
-
 class GravityCompensation(Node):
     def __init__(self):
         super().__init__("gravity_compensation")
 
-        # Get robot description from /robot_state_publisher
+        # Get robot description
         self.declare_parameter("robot_description", "")
         urdf_str = (
             self.get_parameter("robot_description")
@@ -135,32 +55,38 @@ class GravityCompensation(Node):
         )
 
         if not urdf_str:
-            self.get_logger().error(
-                "No robot_description parameter provided. "
-                "Pass it via launch file or remap."
-            )
+            self.get_logger().error("No robot_description parameter provided.")
             raise RuntimeError("Missing robot_description")
 
-        # Build KDL chain: base_link -> wrist_3_link (6 revolute joints)
-        self.chain = build_kdl_chain(urdf_str, "base_link", "wrist_3_link")
-        n_joints = self.chain.getNrOfJoints()
+        # Build Pinocchio model from URDF string
+        # Write to temp file since pinocchio.buildModelFromXML may not be available
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.urdf', delete=False) as f:
+            f.write(urdf_str)
+            urdf_path = f.name
+
+        try:
+            self.model = pinocchio.buildModelFromUrdf(urdf_path)
+        finally:
+            os.unlink(urdf_path)
+
+        self.data = self.model.createData()
+
+        # Find indices of the 6 UR joints in the Pinocchio model
+        self.pin_joint_ids = []
+        for name in JOINT_NAMES:
+            if self.model.existJointName(name):
+                self.pin_joint_ids.append(self.model.getJointId(name))
+            else:
+                self.get_logger().error(f"Joint '{name}' not found in Pinocchio model")
+                raise RuntimeError(f"Missing joint: {name}")
+
+        self.n_joints = len(JOINT_NAMES)
         self.get_logger().info(
-            f"KDL chain built: {self.chain.getNrOfSegments()} segments, "
-            f"{n_joints} joints"
+            f"Pinocchio model: {self.model.nq} DOF, {self.model.njoints} joints"
         )
 
-        if n_joints != 6:
-            self.get_logger().error(
-                f"Expected 6 joints, got {n_joints}. Check URDF chain."
-            )
-            raise RuntimeError(f"Unexpected joint count: {n_joints}")
-
-        self.n_joints = n_joints
-        self.gravity = PyKDL.Vector(0, 0, -9.81)
-        self.dyn_param = PyKDL.ChainDynParam(self.chain, self.gravity)
-
-        self.joint_positions = PyKDL.JntArray(self.n_joints)
-        self.joint_velocities = [0.0] * self.n_joints
+        self.joint_positions = np.zeros(self.n_joints)
+        self.joint_velocities = np.zeros(self.n_joints)
         self.external_torques = [0.0] * self.n_joints
         self.got_joint_states = False
 
@@ -231,11 +157,11 @@ class GravityCompensation(Node):
             # If any non-zero external torque, update hold position to current
             if any(abs(t) > 0.01 for t in msg.data):
                 self.external_active = True
-                self.hold_positions = [self.joint_positions[i] for i in range(self.n_joints)]
+                self.hold_positions = list(self.joint_positions)
             else:
                 self.external_active = False
                 # Lock to current position when external goes to zero
-                self.hold_positions = [self.joint_positions[i] for i in range(self.n_joints)]
+                self.hold_positions = list(self.joint_positions)
 
     def _trajectory_cb(self, msg):
         """Handle trajectory commands (from web dashboard or other sources).
@@ -298,8 +224,22 @@ class GravityCompensation(Node):
             if alpha >= 1.0:
                 self.traj_active = False
 
-        gravity_torques = PyKDL.JntArray(self.n_joints)
-        self.dyn_param.JntToGravity(self.joint_positions, gravity_torques)
+        # Compute gravity torques using Pinocchio
+        # Build full q vector for Pinocchio model (may have more joints than 6)
+        q_full = pinocchio.neutral(self.model)
+        for i, jid in enumerate(self.pin_joint_ids):
+            idx_q = self.model.joints[jid].idx_q
+            q_full[idx_q] = self.joint_positions[i]
+
+        gravity_torques_full = pinocchio.computeGeneralizedGravity(
+            self.model, self.data, q_full
+        )
+
+        # Extract gravity torques for our 6 joints
+        gravity_torques = np.zeros(self.n_joints)
+        for i, jid in enumerate(self.pin_joint_ids):
+            idx_v = self.model.joints[jid].idx_v
+            gravity_torques[i] = gravity_torques_full[idx_v]
 
         msg = Float64MultiArray()
         torques = []

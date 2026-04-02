@@ -10,8 +10,8 @@
   <exec_depend>rclpy</exec_depend>
   <exec_depend>sensor_msgs</exec_depend>
   <exec_depend>std_msgs</exec_depend>
-  <exec_depend>urdf_parser_py</exec_depend>
-  <exec_depend>python_orocos_kdl_vendor</exec_depend>
+  <exec_depend>trajectory_msgs</exec_depend>
+  <exec_depend>pinocchio</exec_depend>
   <export>
     <build_type>ament_cmake</build_type>
   </export>
