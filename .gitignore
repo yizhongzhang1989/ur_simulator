@@ -1,7 +1,7 @@
 # Colcon build artifacts
-build/
-install/
-log/
+/build/
+/install/
+/log/
 
 # Generated URDFs (regenerate with generate_urdf.sh)
 src/ur_web_dashboard/urdf/
