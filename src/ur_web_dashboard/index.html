@@ -231,6 +231,25 @@
         let urdfRobot = null;
         let detectedType = 'ur5e';
 
+        // Default initial joint positions (from ur_description/config/initial_positions.yaml)
+        const INITIAL_POSITIONS = {
+            'shoulder_pan_joint': 0.0,
+            'shoulder_lift_joint': -1.57,
+            'elbow_joint': 0.0,
+            'wrist_1_joint': -1.57,
+            'wrist_2_joint': 0.0,
+            'wrist_3_joint': 0.0,
+        };
+
+        // Initialize jointStates with default positions
+        JOINT_NAMES.forEach(name => {
+            jointStates[name] = {
+                position: INITIAL_POSITIONS[name] ?? 0,
+                velocity: 0,
+                effort: 0,
+            };
+        });
+
         // ============================================================
         // Logging
         // ============================================================
@@ -612,6 +631,13 @@
         // Init
         // ============================================================
         initViewer();
+        buildJogUI();
+        // Populate initial joint table
+        const tbody = document.getElementById('joint-table');
+        tbody.innerHTML = JOINT_NAMES.map(name => {
+            const js = jointStates[name];
+            return `<tr><td>${name}</td><td>${rad2deg(js.position)}</td><td>0.0000</td><td>0.0000</td></tr>`;
+        }).join('');
         loadURDF(detectedType);
         connect();
     </script>
