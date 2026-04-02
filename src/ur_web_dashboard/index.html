@@ -1,0 +1,533 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>UR Robot Dashboard</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #1a1a2e;
+            color: #e0e0e0;
+            min-height: 100vh;
+        }
+        header {
+            background: #16213e;
+            padding: 12px 24px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            border-bottom: 2px solid #0f3460;
+        }
+        header h1 { font-size: 20px; color: #e94560; }
+        .connection-status {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 14px;
+        }
+        .status-dot {
+            width: 10px; height: 10px;
+            border-radius: 50%;
+            background: #ff4444;
+        }
+        .status-dot.connected { background: #44ff44; }
+        .main { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; padding: 16px; }
+        .card {
+            background: #16213e;
+            border-radius: 8px;
+            padding: 16px;
+            border: 1px solid #0f3460;
+        }
+        .card h2 {
+            font-size: 14px;
+            text-transform: uppercase;
+            color: #e94560;
+            margin-bottom: 12px;
+            letter-spacing: 1px;
+        }
+        table { width: 100%; border-collapse: collapse; font-size: 13px; }
+        table th {
+            text-align: left;
+            padding: 6px 8px;
+            color: #888;
+            border-bottom: 1px solid #0f3460;
+            font-weight: 500;
+        }
+        table td {
+            padding: 6px 8px;
+            border-bottom: 1px solid #0f346033;
+            font-family: 'Courier New', monospace;
+        }
+        .tcp-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+        }
+        .tcp-item {
+            background: #1a1a2e;
+            padding: 10px;
+            border-radius: 6px;
+            text-align: center;
+        }
+        .tcp-item .label { font-size: 11px; color: #888; margin-bottom: 4px; }
+        .tcp-item .value { font-size: 18px; font-family: 'Courier New', monospace; }
+        .controller-list { list-style: none; }
+        .controller-list li {
+            padding: 8px 12px;
+            margin-bottom: 6px;
+            background: #1a1a2e;
+            border-radius: 6px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .badge {
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 11px;
+            font-weight: 600;
+        }
+        .badge.active { background: #44ff4433; color: #44ff44; }
+        .badge.inactive { background: #ff444433; color: #ff4444; }
+        .sim-info {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+        }
+        .sim-item {
+            background: #1a1a2e;
+            padding: 10px;
+            border-radius: 6px;
+        }
+        .sim-item .label { font-size: 11px; color: #888; }
+        .sim-item .value { font-size: 16px; font-family: 'Courier New', monospace; }
+        .jog-section { margin-top: 12px; }
+        .jog-row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 6px;
+        }
+        .jog-row .joint-name {
+            width: 160px;
+            font-size: 12px;
+            font-family: 'Courier New', monospace;
+        }
+        .jog-row input[type=range] {
+            flex: 1;
+            accent-color: #e94560;
+        }
+        .jog-row .joint-val {
+            width: 70px;
+            text-align: right;
+            font-size: 12px;
+            font-family: 'Courier New', monospace;
+        }
+        .btn {
+            padding: 8px 16px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 13px;
+            font-weight: 600;
+        }
+        .btn-primary { background: #e94560; color: white; }
+        .btn-primary:hover { background: #c73e55; }
+        .btn-primary:disabled { background: #555; cursor: not-allowed; }
+        .btn-secondary { background: #0f3460; color: #e0e0e0; }
+        .btn-secondary:hover { background: #1a4a80; }
+        .btn-row { display: flex; gap: 8px; margin-top: 12px; }
+        .full-width { grid-column: 1 / -1; }
+        .log {
+            background: #0d0d1a;
+            border-radius: 6px;
+            padding: 8px 12px;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            max-height: 120px;
+            overflow-y: auto;
+            margin-top: 12px;
+        }
+        .log-entry { padding: 2px 0; color: #888; }
+        .log-entry.error { color: #ff4444; }
+        .log-entry.success { color: #44ff44; }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>UR Robot Dashboard <span id="robot-type" style="color:#e0e0e0;font-size:16px;font-weight:400;"></span></h1>
+        <div class="connection-status">
+            <span id="conn-text">Disconnected</span>
+            <div class="status-dot" id="conn-dot"></div>
+        </div>
+    </header>
+
+    <div class="main">
+        <!-- Joint States -->
+        <div class="card">
+            <h2>Joint States</h2>
+            <table>
+                <thead>
+                    <tr><th>Joint</th><th>Position (°)</th><th>Velocity</th><th>Effort</th></tr>
+                </thead>
+                <tbody id="joint-table"></tbody>
+            </table>
+        </div>
+
+        <!-- TCP Pose -->
+        <div class="card">
+            <h2>TCP Pose (tool0)</h2>
+            <div class="tcp-grid">
+                <div class="tcp-item"><div class="label">X (m)</div><div class="value" id="tcp-x">-</div></div>
+                <div class="tcp-item"><div class="label">Y (m)</div><div class="value" id="tcp-y">-</div></div>
+                <div class="tcp-item"><div class="label">Z (m)</div><div class="value" id="tcp-z">-</div></div>
+                <div class="tcp-item"><div class="label">Roll (°)</div><div class="value" id="tcp-roll">-</div></div>
+                <div class="tcp-item"><div class="label">Pitch (°)</div><div class="value" id="tcp-pitch">-</div></div>
+                <div class="tcp-item"><div class="label">Yaw (°)</div><div class="value" id="tcp-yaw">-</div></div>
+            </div>
+        </div>
+
+        <!-- Controllers -->
+        <div class="card">
+            <h2>Controllers</h2>
+            <ul class="controller-list" id="controller-list">
+                <li><span>Loading...</span></li>
+            </ul>
+            <div class="sim-info" style="margin-top: 12px;">
+                <div class="sim-item">
+                    <div class="label">Sim Time</div>
+                    <div class="value" id="sim-time">-</div>
+                </div>
+                <div class="sim-item">
+                    <div class="label">Status</div>
+                    <div class="value" id="sim-status">-</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Jog Control -->
+        <div class="card">
+            <h2>Joint Jog Control</h2>
+            <div class="jog-section" id="jog-section"></div>
+            <div class="btn-row">
+                <button class="btn btn-primary" id="send-jog" disabled>Send Trajectory</button>
+                <button class="btn btn-secondary" id="reset-jog">Reset to Current</button>
+            </div>
+        </div>
+
+        <!-- Log -->
+        <div class="card full-width">
+            <h2>Log</h2>
+            <div class="log" id="log"></div>
+        </div>
+    </div>
+
+    <script>
+        // Configuration
+        const ROSBRIDGE_URL = `ws://${location.hostname}:9090`;
+        const JOINT_NAMES = [
+            'shoulder_pan_joint', 'shoulder_lift_joint', 'elbow_joint',
+            'wrist_1_joint', 'wrist_2_joint', 'wrist_3_joint'
+        ];
+        const JOINT_LIMITS = {
+            'shoulder_pan_joint': [-6.28, 6.28],
+            'shoulder_lift_joint': [-6.28, 6.28],
+            'elbow_joint': [-3.14, 3.14],
+            'wrist_1_joint': [-6.28, 6.28],
+            'wrist_2_joint': [-6.28, 6.28],
+            'wrist_3_joint': [-6.28, 6.28],
+        };
+
+        let ros = null;
+        let jointStates = {};
+        let jogTargets = {};
+
+        // --- Logging ---
+        function log(msg, cls = '') {
+            const el = document.getElementById('log');
+            const ts = new Date().toLocaleTimeString();
+            el.innerHTML += `<div class="log-entry ${cls}">[${ts}] ${msg}</div>`;
+            el.scrollTop = el.scrollHeight;
+        }
+
+        // --- Degrees conversion ---
+        function rad2deg(r) { return (r * 180 / Math.PI).toFixed(2); }
+        function deg2rad(d) { return d * Math.PI / 180; }
+
+        // --- Quaternion to Euler ---
+        function quatToEuler(q) {
+            const { x, y, z, w } = q;
+            const sinr = 2 * (w * x + y * z);
+            const cosr = 1 - 2 * (x * x + y * y);
+            const roll = Math.atan2(sinr, cosr);
+            const sinp = 2 * (w * y - z * x);
+            const pitch = Math.abs(sinp) >= 1 ? Math.sign(sinp) * Math.PI / 2 : Math.asin(sinp);
+            const siny = 2 * (w * z + x * y);
+            const cosy = 1 - 2 * (y * y + z * z);
+            const yaw = Math.atan2(siny, cosy);
+            return { roll, pitch, yaw };
+        }
+
+        // --- Build jog sliders ---
+        function buildJogUI() {
+            const sec = document.getElementById('jog-section');
+            sec.innerHTML = '';
+            JOINT_NAMES.forEach(name => {
+                const [lo, hi] = JOINT_LIMITS[name];
+                const cur = jointStates[name]?.position ?? 0;
+                jogTargets[name] = cur;
+                const row = document.createElement('div');
+                row.className = 'jog-row';
+                row.innerHTML = `
+                    <span class="joint-name">${name}</span>
+                    <input type="range" min="${lo}" max="${hi}" step="0.01" value="${cur}"
+                           id="jog-${name}" oninput="updateJog('${name}', this.value)">
+                    <span class="joint-val" id="jogval-${name}">${rad2deg(cur)}</span>
+                `;
+                sec.appendChild(row);
+            });
+        }
+
+        window.updateJog = function(name, val) {
+            val = parseFloat(val);
+            jogTargets[name] = val;
+            document.getElementById(`jogval-${name}`).textContent = rad2deg(val);
+        };
+
+        // --- ROS Connection ---
+        function connect() {
+            log(`Connecting to ${ROSBRIDGE_URL}...`);
+            const ws = new WebSocket(ROSBRIDGE_URL);
+
+            ws.onopen = () => {
+                log('Connected to rosbridge', 'success');
+                document.getElementById('conn-dot').classList.add('connected');
+                document.getElementById('conn-text').textContent = 'Connected';
+                document.getElementById('send-jog').disabled = false;
+                ros = ws;
+                subscribe();
+            };
+
+            ws.onclose = () => {
+                log('Disconnected from rosbridge', 'error');
+                document.getElementById('conn-dot').classList.remove('connected');
+                document.getElementById('conn-text').textContent = 'Disconnected';
+                document.getElementById('send-jog').disabled = true;
+                ros = null;
+                setTimeout(connect, 3000);
+            };
+
+            ws.onerror = (e) => {
+                log('WebSocket error', 'error');
+            };
+
+            ws.onmessage = (event) => {
+                const msg = JSON.parse(event.data);
+                if (msg.op === 'publish') {
+                    handleTopic(msg.topic, msg.msg);
+                } else if (msg.op === 'service_response') {
+                    handleServiceResponse(msg);
+                } else if (msg.op === 'result') {
+                    handleActionResult(msg);
+                }
+            };
+        }
+
+        function send(obj) {
+            if (ros && ros.readyState === WebSocket.OPEN) {
+                ros.send(JSON.stringify(obj));
+            }
+        }
+
+        // --- Subscribe to topics ---
+        function subscribe() {
+            // Joint states
+            send({
+                op: 'subscribe',
+                topic: '/joint_states',
+                type: 'sensor_msgs/msg/JointState',
+                throttle_rate: 200  // 5 Hz max
+            });
+
+            // TF for TCP pose
+            send({
+                op: 'subscribe',
+                topic: '/tf',
+                type: 'tf2_msgs/msg/TFMessage',
+                throttle_rate: 200
+            });
+
+            // Clock
+            send({
+                op: 'subscribe',
+                topic: '/clock',
+                type: 'rosgraph_msgs/msg/Clock',
+                throttle_rate: 500
+            });
+
+            // Poll controllers every 5 seconds
+            pollControllers();
+            setInterval(pollControllers, 5000);
+
+            // Detect robot type from robot_description
+            fetchRobotType();
+
+            buildJogUI();
+        }
+
+        // --- Handle incoming messages ---
+        function handleTopic(topic, msg) {
+            if (topic === '/joint_states') {
+                updateJointStates(msg);
+            } else if (topic === '/tf') {
+                updateTCP(msg);
+            } else if (topic === '/clock') {
+                updateClock(msg);
+            }
+        }
+
+        function updateJointStates(msg) {
+            const tbody = document.getElementById('joint-table');
+            let html = '';
+            for (let i = 0; i < msg.name.length; i++) {
+                const name = msg.name[i];
+                jointStates[name] = {
+                    position: msg.position[i],
+                    velocity: msg.velocity?.[i] ?? 0,
+                    effort: msg.effort?.[i] ?? 0,
+                };
+                html += `<tr>
+                    <td>${name}</td>
+                    <td>${rad2deg(msg.position[i])}</td>
+                    <td>${(msg.velocity?.[i] ?? 0).toFixed(4)}</td>
+                    <td>${(msg.effort?.[i] ?? 0).toFixed(4)}</td>
+                </tr>`;
+            }
+            tbody.innerHTML = html;
+        }
+
+        function updateTCP(msg) {
+            for (const tf of msg.transforms) {
+                if (tf.child_frame_id === 'tool0') {
+                    const t = tf.transform.translation;
+                    const r = tf.transform.rotation;
+                    document.getElementById('tcp-x').textContent = t.x.toFixed(4);
+                    document.getElementById('tcp-y').textContent = t.y.toFixed(4);
+                    document.getElementById('tcp-z').textContent = t.z.toFixed(4);
+                    const euler = quatToEuler(r);
+                    document.getElementById('tcp-roll').textContent = rad2deg(euler.roll);
+                    document.getElementById('tcp-pitch').textContent = rad2deg(euler.pitch);
+                    document.getElementById('tcp-yaw').textContent = rad2deg(euler.yaw);
+                }
+            }
+        }
+
+        function updateClock(msg) {
+            const sec = msg.clock.sec;
+            const m = Math.floor(sec / 60);
+            const s = sec % 60;
+            document.getElementById('sim-time').textContent = `${m}m ${s}s`;
+            document.getElementById('sim-status').textContent = 'Running';
+        }
+
+        // --- Poll controllers ---
+        let serviceId = 0;
+        function pollControllers() {
+            const id = `ctrl_${++serviceId}`;
+            send({
+                op: 'call_service',
+                service: '/controller_manager/list_controllers',
+                type: 'controller_manager_msgs/srv/ListControllers',
+                args: {},
+                id: id
+            });
+        }
+
+        function fetchRobotType() {
+            send({
+                op: 'call_service',
+                service: '/robot_state_publisher/get_parameters',
+                type: 'rcl_interfaces/srv/GetParameters',
+                args: { names: ['robot_description'] },
+                id: 'get_robot_desc'
+            });
+        }
+
+        function handleServiceResponse(msg) {
+            if (msg.id === 'get_robot_desc') {
+                try {
+                    const desc = msg.values?.values?.[0]?.string_value || '';
+                    // Detect ur type from mesh path (e.g. meshes/ur5e/visual/)
+                    const match = desc.match(/meshes\/(ur\w+)\//i);
+                    if (match) {
+                        const urType = match[1].toUpperCase();
+                        document.getElementById('robot-type').textContent = `— ${urType}`;
+                        log(`Robot type: ${urType}`, 'success');
+                    } else {
+                        const robotMatch = desc.match(/<robot[^>]*name="([^"]+)"/);
+                        if (robotMatch) {
+                            document.getElementById('robot-type').textContent = `— ${robotMatch[1].toUpperCase()}`;
+                            log(`Robot: ${robotMatch[1]}`, 'success');
+                        }
+                    }
+                } catch(e) { log('Could not detect robot type', 'error'); }
+                return;
+            }
+            if (msg.id && msg.id.startsWith('ctrl_') && msg.values?.controller) {
+                const list = document.getElementById('controller-list');
+                list.innerHTML = '';
+                msg.values.controller.forEach(c => {
+                    const li = document.createElement('li');
+                    const state = c.state || 'unknown';
+                    const badgeCls = state === 'active' ? 'active' : 'inactive';
+                    li.innerHTML = `<span>${c.name} <small style="color:#888">(${c.type})</small></span>
+                                    <span class="badge ${badgeCls}">${state}</span>`;
+                    list.appendChild(li);
+                });
+            }
+        }
+
+        // --- Send jog trajectory ---
+        document.getElementById('send-jog').addEventListener('click', () => {
+            const positions = JOINT_NAMES.map(n => jogTargets[n]);
+            log(`Sending trajectory: [${positions.map(p => rad2deg(p)).join(', ')}]°`);
+
+            send({
+                op: 'publish',
+                topic: '/joint_trajectory_controller/joint_trajectory',
+                type: 'trajectory_msgs/msg/JointTrajectory',
+                msg: {
+                    header: { stamp: { sec: 0, nanosec: 0 }, frame_id: '' },
+                    joint_names: JOINT_NAMES,
+                    points: [{
+                        positions: positions,
+                        velocities: [],
+                        accelerations: [],
+                        effort: [],
+                        time_from_start: { sec: 3, nanosec: 0 }
+                    }]
+                }
+            });
+
+            log('Trajectory sent', 'success');
+        });
+
+        document.getElementById('reset-jog').addEventListener('click', () => {
+            JOINT_NAMES.forEach(name => {
+                const cur = jointStates[name]?.position ?? 0;
+                jogTargets[name] = cur;
+                const slider = document.getElementById(`jog-${name}`);
+                if (slider) slider.value = cur;
+                const valEl = document.getElementById(`jogval-${name}`);
+                if (valEl) valEl.textContent = rad2deg(cur);
+            });
+            log('Jog targets reset to current positions');
+        });
+
+        // --- Init ---
+        connect();
+    </script>
+</body>
+</html>
