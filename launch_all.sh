@@ -4,14 +4,38 @@
 # 2. rosbridge WebSocket server
 # 3. Web dashboard
 #
-# Usage: ./launch_all.sh [config_file]
+
+# Usage: ./launch_all.sh [--control_mode position|effort] [config_file]
+#   --control_mode: position (default) or effort
 #   config_file: path to config YAML (default: config/config.yaml)
 
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+set -e
+
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 WS_DIR="$SCRIPT_DIR"
-CONFIG_FILE="${1:-$WS_DIR/config/config.yaml}"
+
+# Default values
+CONTROL_MODE="position"
+CONFIG_FILE=""
+
+# Parse arguments
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        --control_mode)
+            CONTROL_MODE="$2"
+            shift 2
+            ;;
+        *)
+            CONFIG_FILE="$1"
+            shift
+            ;;
+    esac
+done
+
+CONFIG_FILE="${CONFIG_FILE:-$WS_DIR/config/config.yaml}"
 
 # Generate config from template if it doesn't exist
 if [ ! -f "$CONFIG_FILE" ]; then
@@ -49,18 +73,6 @@ else
     WORLD_FILE="$WS_DIR/src/ur_web_dashboard/worlds/${WORLD_FILE_CFG:-no_ground_collision.sdf}"
 fi
 
-echo "=== UR Robot Simulator ==="
-echo "Config:     $CONFIG_FILE"
-echo "Robot type: $UR_TYPE"
-echo "Gazebo GUI: $GAZEBO_GUI"
-echo "World:      $WORLD_FILE"
-echo "Ports:      dashboard=$DASHBOARD_PORT, rosbridge=$ROSBRIDGE_PORT"
-echo ""
-
-# Source ROS and workspace
-source /opt/ros/humble/setup.bash
-source "$WS_DIR/install/setup.bash" 2>/dev/null || true
-
 # Kill any existing processes
 echo "[1/4] Cleaning up old processes..."
 pkill -f "ign gazebo" 2>/dev/null || true
@@ -85,13 +97,22 @@ else
     echo "[2/4] Static URDFs already exist, skipping generation."
 fi
 
-# Start Gazebo simulation
+
+# Start Gazebo simulation with selected control mode
 echo "[3/4] Starting Gazebo simulation..."
-ros2 launch ur_simulation_gz ur_sim_control.launch.py \
-    ur_type:="$UR_TYPE" \
-    gazebo_gui:="$GAZEBO_GUI" \
-    launch_rviz:="$LAUNCH_RVIZ" \
-    world_file:="$WORLD_FILE" &
+if [ "$CONTROL_MODE" = "effort" ]; then
+    ros2 launch ur_sim_config ur_sim_effort.launch.py \
+        ur_type:="$UR_TYPE" \
+        gazebo_gui:="$GAZEBO_GUI" \
+        launch_rviz:="$LAUNCH_RVIZ" \
+        world_file:="$WORLD_FILE" &
+else
+    ros2 launch ur_simulation_gz ur_sim_control.launch.py \
+        ur_type:="$UR_TYPE" \
+        gazebo_gui:="$GAZEBO_GUI" \
+        launch_rviz:="$LAUNCH_RVIZ" \
+        world_file:="$WORLD_FILE" &
+fi
 SIM_PID=$!
 
 # Wait for simulation to be ready
