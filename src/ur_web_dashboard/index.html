@@ -8,8 +8,9 @@
     {
         "imports": {
             "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
-            "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/",
-            "urdf-loader": "https://cdn.jsdelivr.net/npm/urdf-loader@0.12.4/src/URDFLoader.js"
+            "three/": "https://cdn.jsdelivr.net/npm/three@0.170.0/",
+            "urdf-loader": "https://cdn.jsdelivr.net/npm/urdf-loader@0.12.4/src/URDFLoader.js",
+            "urdf-loader/": "https://cdn.jsdelivr.net/npm/urdf-loader@0.12.4/"
         }
     }
     </script>
@@ -204,9 +205,7 @@
 
     <script type="module">
         import * as THREE from 'three';
-        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-        import { ColladaLoader } from 'three/addons/loaders/ColladaLoader.js';
-        import { STLLoader } from 'three/addons/loaders/STLLoader.js';
+        import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
         import URDFLoader from 'urdf-loader';
 
         // ============================================================
@@ -338,54 +337,32 @@
                     return;
                 }
 
-                const manager = new THREE.LoadingManager();
-                const loader = new URDFLoader(manager);
-
-                loader.loadMeshCb = (path, manager, onComplete) => {
-                    if (path.endsWith('.dae')) {
-                        new ColladaLoader(manager).load(path, (result) => {
-                            result.scene.traverse(child => {
-                                if (child.isMesh) {
-                                    child.castShadow = true;
-                                    child.receiveShadow = true;
-                                }
-                            });
-                            onComplete(result.scene);
-                        }, undefined, (err) => {
-                            console.warn('DAE load error:', path, err);
-                            onComplete(new THREE.Mesh(
-                                new THREE.BoxGeometry(0.05, 0.05, 0.05),
-                                new THREE.MeshStandardMaterial({ color: 0xe94560 })
-                            ));
-                        });
-                    } else if (path.endsWith('.stl')) {
-                        new STLLoader(manager).load(path, (geometry) => {
-                            const mesh = new THREE.Mesh(geometry,
-                                new THREE.MeshStandardMaterial({ color: 0xcccccc }));
-                            mesh.castShadow = true;
-                            onComplete(mesh);
-                        }, undefined, (err) => {
-                            console.warn('STL load error:', path, err);
-                            onComplete(new THREE.Mesh(
-                                new THREE.BoxGeometry(0.05, 0.05, 0.05),
-                                new THREE.MeshStandardMaterial({ color: 0xe94560 })
-                            ));
-                        });
-                    } else {
-                        onComplete(new THREE.Object3D());
-                    }
-                };
+                const loader = new URDFLoader();
+                loader.parseCollision = false;
+                loader.parseVisual = true;
 
                 loader.load(urdfPath, (robot) => {
                     if (urdfRobot) scene.remove(urdfRobot);
                     urdfRobot = robot;
+
+                    // Enable shadows on all meshes
+                    robot.traverse(child => {
+                        if (child.isMesh) {
+                            child.castShadow = true;
+                            child.receiveShadow = true;
+                        }
+                    });
+
                     scene.add(robot);
                     document.getElementById('viewer-loading').style.display = 'none';
                     log(`3D model loaded: ${urType}`, 'success');
                     updateRobot3D();
+                }, undefined, (err) => {
+                    log(`Failed to load URDF: ${err}`, 'error');
+                    document.getElementById('viewer-loading').textContent = 'Failed to load model';
                 });
             }).catch(err => {
-                log(`Failed to load URDF: ${err}`, 'error');
+                log(`Failed to fetch URDF: ${err}`, 'error');
             });
         }
 
