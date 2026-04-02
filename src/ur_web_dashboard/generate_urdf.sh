@@ -16,7 +16,7 @@ UR_TYPES="ur3 ur5 ur10 ur3e ur5e ur7e ur10e ur12e ur16e ur20 ur30"
 for ur_type in $UR_TYPES; do
     echo "Generating URDF for $ur_type..."
     xacro "$XACRO_FILE" ur_type:="$ur_type" name:=ur 2>/dev/null \
-        | sed 's|package://ur_description/|/ur_description/|g' \
+        | sed 's|package://ur_description/|../ur_description/|g' \
         > "$OUTPUT_DIR/${ur_type}.urdf"
 done
 

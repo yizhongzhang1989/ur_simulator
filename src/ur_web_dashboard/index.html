@@ -343,6 +343,10 @@
 
                 loader.load(urdfPath, (robot) => {
                     if (urdfRobot) scene.remove(urdfRobot);
+
+                    // ROS URDF uses Z-up, Three.js uses Y-up
+                    robot.rotation.x = -Math.PI / 2;
+
                     urdfRobot = robot;
 
                     // Enable shadows on all meshes
@@ -355,7 +359,12 @@
 
                     scene.add(robot);
                     document.getElementById('viewer-loading').style.display = 'none';
-                    log(`3D model loaded: ${urType}`, 'success');
+
+                    // Debug: log bounding box
+                    const box = new THREE.Box3().setFromObject(robot);
+                    const size = box.getSize(new THREE.Vector3());
+                    log(`3D model loaded: ${urType} (size: ${size.x.toFixed(2)} x ${size.y.toFixed(2)} x ${size.z.toFixed(2)})`, 'success');
+
                     updateRobot3D();
                 }, undefined, (err) => {
                     log(`Failed to load URDF: ${err}`, 'error');
