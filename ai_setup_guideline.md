@@ -1,292 +1,233 @@
 # AI Setup Guideline — UR Robot Simulator
 
-This file guides an AI agent through setting up and extending the UR robot simulation
-environment. Follow each phase in order. Execute commands verbatim unless adaptation
-is required for the host system.
+This file is intended for AI agents. When a user clones this repo and asks an AI
+to set up the environment, the AI should follow these instructions.
 
-## Prerequisites
+## Quick Reference
 
-- **OS:** Ubuntu 22.04
-- **ROS 2:** Humble (installed at `/opt/ros/humble/`)
-- **Tools required:** `colcon`, `vcs`, `rosdep`, `git`
-- **Workspace root:** `/home/yizhongzhang/Documents/ur_sim`
+```
+Workspace root: the directory containing this file
+ROS distro:     Humble (Ubuntu 22.04)
+Build system:   colcon
+Submodules:     ur_simulation_gz (Gazebo sim), ur_description (URDF + meshes)
+One-command:    ./launch_all.sh
+Config:         config/config.yaml (auto-generated from config/config.template.yaml)
+```
 
-## Known Issues
+## Setup Steps
 
-- `raw.githubusercontent.com` may resolve to `0.0.0.0` due to DNS filtering.
-  `rosdep update` will fail in this case. **Workaround:** skip `rosdep update` and
-  rely on the existing cached rosdep database. It is sufficient for all packages used
-  in this project.
-- The VM has no X display (`$DISPLAY` is unset). Always launch Gazebo and RViz in
-  headless mode: `gazebo_gui:=false launch_rviz:=false`.
+Run these in order. All commands assume the working directory is the repo root.
 
----
+### Step 1: Verify prerequisites
 
-## Phase 1 — Environment & Simulation Setup [COMPLETED]
+```bash
+# Check OS
+lsb_release -a   # Expect: Ubuntu 22.04
 
-All steps below have been executed and verified.
+# Check ROS 2
+source /opt/ros/humble/setup.bash
+ros2 --help       # Should work
 
-### 1.1 Install Gazebo + ROS bridge (apt binary)
+# Check tools
+which colcon git xacro   # All must exist
+```
+
+If ROS 2 Humble is not installed, install it first per
+https://docs.ros.org/en/humble/Installation.html.
+
+### Step 2: Initialize submodules
+
+If the repo was cloned without `--recurse-submodules`:
+
+```bash
+git submodule update --init --recursive
+```
+
+Verify: `src/ur_simulation_gz/` and `src/ur_description/` should be non-empty.
+
+### Step 3: Install apt dependencies
 
 ```bash
 sudo apt-get update
-sudo apt-get install -y ros-humble-ros-gz
-```
-
-### 1.2 Clone `ur_simulation_gz` (the only source-build package)
-
-```bash
-cd /home/yizhongzhang/Documents/ur_sim
-mkdir -p src
-git clone -b humble https://github.com/UniversalRobots/Universal_Robots_ROS2_GZ_Simulation.git src/ur_simulation_gz
-```
-
-### 1.3 Install remaining dependencies as apt binaries
-
-Do NOT build these from source — binary packages are available and much faster:
-
-```bash
 sudo apt-get install -y \
+  ros-humble-ros-gz \
   ros-humble-gz-ros2-control \
   ros-humble-ur-description \
   ros-humble-ros2-control \
   ros-humble-ros2-controllers \
   ros-humble-moveit \
-  ros-humble-ur-moveit-config
+  ros-humble-ur-moveit-config \
+  ros-humble-rosbridge-suite
 ```
 
-Then install any remaining rosdep keys (skip `rosdep update` if DNS is blocked):
+Then install any remaining rosdep keys:
 
 ```bash
 source /opt/ros/humble/setup.bash
 rosdep install --ignore-src --from-paths src -y
 ```
 
-### 1.4 Build workspace
+**Tip:** If `rosdep update` fails due to DNS issues (e.g. `raw.githubusercontent.com`
+resolves to `0.0.0.0`), skip it — the cached rosdep database is sufficient.
 
-Only `ur_simulation_gz` needs building (~1 second):
+### Step 4: Build
+
+Only `ur_simulation_gz` needs source building (~1 second):
 
 ```bash
-cd /home/yizhongzhang/Documents/ur_sim
 source /opt/ros/humble/setup.bash
 colcon build --symlink-install
 ```
 
-### 1.5 Verify simulation
+### Step 5: Launch
 
 ```bash
-source install/setup.bash
-ros2 launch ur_simulation_gz ur_sim_control.launch.py gazebo_gui:=false launch_rviz:=false
+./launch_all.sh
 ```
 
-**Expected result:** Gazebo Ignition Fortress starts in server mode. All 6 UR5e joints
-load. `joint_state_broadcaster` and `joint_trajectory_controller` activate. No errors.
+This will:
+1. Generate `config/config.yaml` from template (first run only)
+2. Generate static URDFs for the 3D web viewer (first run only)
+3. Start Gazebo simulation (headless by default)
+4. Start rosbridge WebSocket server
+5. Start the web dashboard
 
-**Verification commands (in a second terminal):**
+Open `http://localhost:8080` in a browser.
+
+**Headless environment (no X display):** The default config already sets
+`gazebo_gui: false` and `launch_rviz: false`. No changes needed.
+
+### Step 6: Verify
+
+In a separate terminal:
 
 ```bash
-source /home/yizhongzhang/Documents/ur_sim/install/setup.bash
-ros2 topic echo /joint_states --once          # Should show 6 joint positions
-ros2 topic echo /clock --once                 # Should show advancing sim time
-ros2 control list_controllers                 # Should list 2 active controllers
+source /opt/ros/humble/setup.bash
+ros2 topic echo /joint_states --once   # Should show 6 joint positions
+ros2 control list_controllers          # Should list 2 active controllers
 ```
-
-### Launch file reference
-
-File: `src/ur_simulation_gz/ur_simulation_gz/launch/ur_sim_control.launch.py`
-
-Key arguments:
-| Argument | Default | Description |
-|---|---|---|
-| `ur_type` | `ur5e` | Robot model (ur3, ur5, ur5e, ur10e, ur16e, ur20, ur30, etc.) |
-| `gazebo_gui` | `true` | Set `false` for headless (no X display required) |
-| `launch_rviz` | `true` | Set `false` for headless |
-| `start_joint_controller` | `true` | Auto-start the trajectory controller |
-| `initial_joint_controller` | `joint_trajectory_controller` | Controller to start |
-| `world_file` | `empty.sdf` | Gazebo world file |
 
 ---
 
-## Phase 2 — Control Interface Layer [COMPLETED]
+## Configuration
 
-The simulation exposes standard ROS 2 control interfaces. Verified working.
+Edit `config/config.yaml` to change settings. Key parameters:
 
-### 2.1 Available ROS 2 interfaces
+| Parameter | Default | Description |
+|---|---|---|
+| `ur_type` | `ur5e` | Robot model: ur3, ur3e, ur5, ur5e, ur7e, ur8long, ur10, ur10e, ur12e, ur15, ur16e, ur18, ur20, ur30 |
+| `gazebo_gui` | `false` | Show Gazebo GUI (requires X display) |
+| `launch_rviz` | `false` | Launch RViz (requires X display) |
+| `world_file` | `no_ground_collision.sdf` | Gazebo world file |
+| `rosbridge_port` | `9090` | rosbridge WebSocket port |
+| `dashboard_port` | `8080` | Web dashboard HTTP port |
 
-After launching the simulation, these interfaces are available:
+---
 
-```bash
-# Joint states (sensor feedback) — 6 joints at ~500 Hz
-ros2 topic echo /joint_states --once
+## Architecture
 
-# Trajectory control via topic (direct publish)
-ros2 topic pub --once /joint_trajectory_controller/joint_trajectory \
-  trajectory_msgs/msg/JointTrajectory "{...}"
-
-# Trajectory control via action (with feedback)
-ros2 action info /joint_trajectory_controller/follow_joint_trajectory
-
-# Controller manager
-ros2 control list_controllers
-ros2 control list_hardware_interfaces
+```
+Browser (HTTP)       <--:8080--> server.py (static files + mesh routing)
+Browser (WebSocket)  <--:9090--> rosbridge_websocket <--ROS 2--> Gazebo Ignition
 ```
 
-**Active controllers:**
-- `joint_state_broadcaster` (JointStateBroadcaster) — active
-- `joint_trajectory_controller` (JointTrajectoryController) — active
+### ROS 2 Interfaces
 
-**Joint names (in order):**
+| Interface | Type | Description |
+|---|---|---|
+| `/joint_states` | sensor_msgs/JointState | Joint positions, velocities, efforts |
+| `/joint_trajectory_controller/joint_trajectory` | trajectory_msgs/JointTrajectory | Send trajectory commands |
+| `/joint_trajectory_controller/follow_joint_trajectory` | action | Trajectory with feedback |
+| `/controller_manager/list_controllers` | service | List active controllers |
+| `/clock` | rosgraph_msgs/Clock | Simulation time |
+
+### Joint Names (in order)
+
 `shoulder_pan_joint`, `shoulder_lift_joint`, `elbow_joint`,
 `wrist_1_joint`, `wrist_2_joint`, `wrist_3_joint`
 
-### 2.2 Test trajectory execution
+### Default Joint Positions (from URDF)
 
-Verified — publish a trajectory and joints move to commanded positions:
-
-```bash
-ros2 topic pub --once /joint_trajectory_controller/joint_trajectory \
-  trajectory_msgs/msg/JointTrajectory "{
-  header: {stamp: {sec: 0, nanosec: 0}, frame_id: ''},
-  joint_names: ['shoulder_pan_joint', 'shoulder_lift_joint', 'elbow_joint',
-                'wrist_1_joint', 'wrist_2_joint', 'wrist_3_joint'],
-  points: [{positions: [0.5, -1.0, 0.5, -1.0, 0.5, 0.0],
-            velocities: [], accelerations: [], effort: [],
-            time_from_start: {sec: 3, nanosec: 0}}]
-}"
 ```
-
-### 2.3 Sim/real note
-
-The sim uses `joint_trajectory_controller`. Real UR robots use
-`scaled_joint_trajectory_controller`. For portable control code, either:
-- Create a launch-time topic remapping, or
-- Use a config parameter for the controller name
+shoulder_pan_joint:  0.0
+shoulder_lift_joint: -1.57  (-90°)
+elbow_joint:         0.0
+wrist_1_joint:       -1.57  (-90°)
+wrist_2_joint:       0.0
+wrist_3_joint:       0.0
+```
 
 ---
 
-## Phase 3 — Web Dashboard [COMPLETED]
-
-A browser-based dashboard for monitoring and controlling the simulated robot.
-
-### 3.1 Install WebSocket bridge
-
-```bash
-sudo apt-get install -y ros-humble-rosbridge-suite
-```
-
-### 3.2 Launch rosbridge
-
-```bash
-ros2 launch rosbridge_server rosbridge_websocket_launch.xml
-```
-
-Exposes all ROS 2 topics/services/actions over WebSocket on port 9090.
-
-### 3.3 Launch web dashboard
-
-```bash
-cd src/ur_web_dashboard && python3 -m http.server 8080
-```
-
-Open `http://<host>:8080` in a browser.
-
-### 3.4 Dashboard features (implemented)
+## Web Dashboard Details
 
 File: `src/ur_web_dashboard/index.html` (single-page, no build step)
 
-- **Joint states table** — real-time positions (°), velocities, efforts
-- **TCP pose** — X/Y/Z position + Roll/Pitch/Yaw from `/tf` (tool0 frame)
-- **Controller status** — polls `/controller_manager/list_controllers` every 5s
-- **Sim clock** — displays simulation time from `/clock`
-- **Joint jog sliders** — per-joint sliders with degree readouts
-- **Send trajectory** — publishes to `/joint_trajectory_controller/joint_trajectory`
-- **Reset to current** — snaps sliders to current joint positions
-- **Connection status** — auto-reconnects to rosbridge on disconnect
-- **Log panel** — timestamped event log
+### Features
 
-Uses raw WebSocket to rosbridge (no roslibjs CDN dependency — works offline).
+- 3D robot viewer (Three.js + urdf-loader, orbit controls)
+- Real-time joint states table
+- TCP pose via forward kinematics (tool0 frame)
+- Auto-detect robot type from simulation
+- Controller status polling
+- Sim clock display
+- Joint jog sliders with trajectory send
+- Self-contained (all JS vendored in `lib/`, no CDN)
 
-### 3.5 Architecture
+### File Serving (server.py)
 
-```
-Browser (WebSocket) <--:9090--> rosbridge_websocket <--ROS 2--> Gazebo sim
-                    <--:8080--> python3 http.server (static files)
-```
+`server.py` routes requests:
+- `/` → `index.html`
+- `/lib/` → vendored JS libraries
+- `/urdf/` → generated static URDFs
+- `/ur_description/` → submodule meshes (`.dae`, `.stl`)
 
-### 3.6 One-command launch
-
-`./launch_all.sh [ur_type]` starts all three services (sim, rosbridge, dashboard).
-Default robot is `ur5e`. Cleans up all processes on Ctrl+C.
+Use `server.py` instead of `python3 -m http.server` — the latter can't serve meshes.
 
 ---
 
-## Phase 4 — Control System Integration [NOT STARTED]
-
-### 4.1 Connect custom control system
-
-The custom control system should publish to:
-- `/joint_trajectory_controller/follow_joint_trajectory` (action)
-
-And subscribe to:
-- `/joint_states` (sensor_msgs/msg/JointState)
-- `/tf` (geometry_msgs/msg/TransformStamped) for TCP pose
-
-### 4.2 Validate
-
-- Trajectory tracking accuracy
-- Collision avoidance behavior
-- Timing consistency (sim time vs. wall time)
-
----
-
-## Phase 5 — Polish & Sim↔Real Parity [NOT STARTED]
-
-- Add a launch argument `use_sim:=true|false` to switch between sim and real robot
-- Tune Gazebo physics parameters (PID gains, friction, inertia)
-- Add `ros2 bag` recording for post-hoc analysis
-- Dockerize the full stack for reproducible deployment
-
----
-
-## Key Dependencies (all installed via apt)
-
-| Component | apt Package | Purpose |
-|---|---|---|
-| Gazebo + ROS bridge | `ros-humble-ros-gz` | Physics simulation |
-| Gazebo ros2_control | `ros-humble-gz-ros2-control` | Hardware interface plugin |
-| Robot URDF | `ros-humble-ur-description` | UR robot model |
-| Control framework | `ros-humble-ros2-control` | Controller manager |
-| Controllers | `ros-humble-ros2-controllers` | JTC, JSB, etc. |
-| Motion planning | `ros-humble-moveit` | MoveIt 2 |
-| MoveIt config | `ros-humble-ur-moveit-config` | UR-specific MoveIt config |
-| Web bridge | `ros-humble-rosbridge-suite` | WebSocket↔ROS 2 |
-| **Source build** | `ur_simulation_gz` | Launch files & configs |
-
-## Workspace Structure
+## Repository Structure
 
 ```
-/home/yizhongzhang/Documents/ur_sim/
+├── config/
+│   ├── config.template.yaml       # Configuration template (tracked)
+│   └── config.yaml                # User config (gitignored, auto-generated)
 ├── src/
-│   ├── ur_simulation_gz/          # UR Gazebo sim (source-build)
-│   │   └── ur_simulation_gz/
-│   │       ├── launch/            # Launch files
-│   │       ├── config/            # Controller YAML configs
-│   │       ├── urdf/              # Xacro overrides
-│   │       └── test/
-│   └── ur_web_dashboard/          # Web dashboard (static files)
-│       └── index.html             # Single-page dashboard app
-├── install/                       # Colcon install space
-├── build/                         # Colcon build artifacts
-├── log/                           # Colcon build logs
-├── install_deps.sh                # Automated install script
-├── launch_all.sh                  # One-command full stack launcher
-└── ai_setup_guideline.md          # This file
+│   ├── ur_simulation_gz/          # Git submodule: UR Gazebo sim
+│   ├── ur_description/            # Git submodule: UR URDF + meshes
+│   └── ur_web_dashboard/
+│       ├── index.html             # Dashboard app
+│       ├── server.py              # HTTP server
+│       ├── lib/                   # Vendored JS (Three.js 0.170.0, urdf-loader 0.12.4)
+│       ├── urdf/                  # Generated URDFs (gitignored, auto-generated)
+│       └── worlds/
+│           └── no_ground_collision.sdf
+├── launch_all.sh                  # One-command launcher
+├── install_deps.sh                # Dependency installer (legacy)
+├── ai_setup_guideline.md          # This file
+└── README.md
 ```
 
-## Service Ports
+## Key Dependencies (all apt)
 
-| Service | Port | Protocol |
-|---|---|---|
-| Web dashboard | 8080 | HTTP |
-| rosbridge | 9090 | WebSocket |
-| Gazebo sim | — | ROS 2 (local) |
+| apt Package | Purpose |
+|---|---|
+| `ros-humble-ros-gz` | Gazebo Ignition Fortress + ROS bridge |
+| `ros-humble-gz-ros2-control` | Gazebo hardware interface plugin |
+| `ros-humble-ur-description` | UR robot URDF (fallback if submodule missing) |
+| `ros-humble-ros2-control` | Controller manager framework |
+| `ros-humble-ros2-controllers` | JointTrajectoryController, JointStateBroadcaster |
+| `ros-humble-moveit` | Motion planning (optional) |
+| `ros-humble-ur-moveit-config` | UR-specific MoveIt config (optional) |
+| `ros-humble-rosbridge-suite` | WebSocket bridge to ROS 2 |
+
+## Troubleshooting
+
+| Problem | Solution |
+|---|---|
+| `rosdep update` fails | Skip it — cached data is sufficient |
+| Gazebo GUI won't start | Set `gazebo_gui: false` in config (no X display) |
+| "Service does not exist" errors on dashboard | Timing issue — rosbridge started before sim. Wait and refresh |
+| URDF 404 on dashboard | URDFs not generated. Delete `src/ur_web_dashboard/urdf/` and rerun `./launch_all.sh` |
+| Port already in use | Kill old processes: `pkill -9 -f "ign gazebo"; pkill -9 -f rosbridge; pkill -9 -f server.py` |
+| Stale Gazebo preventing restart | `pkill -9 -f "ign gazebo"` then wait 2 seconds |
