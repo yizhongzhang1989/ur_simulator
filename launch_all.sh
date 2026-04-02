@@ -35,9 +35,10 @@ echo "[2/3] Starting Gazebo simulation (headless)..."
 WORLD_FILE="$WS_DIR/src/ur_web_dashboard/worlds/no_ground_collision.sdf"
 
 # Create a wrapper xacro that adds self-collision tags
-UR_DESC_DIR="$(ros2 pkg prefix ur_description)/share/ur_description"
-WRAPPER_XACRO="/tmp/ur_self_collide.urdf.xacro"
-cat > "$WRAPPER_XACRO" << 'XACRO_EOF'
+# Place it in the workspace install overlay so FindPackageShare resolves it
+OVERLAY_URDF_DIR="$WS_DIR/install/ur_description/share/ur_description/urdf"
+mkdir -p "$OVERLAY_URDF_DIR"
+cat > "$OVERLAY_URDF_DIR/ur_self_collide.urdf.xacro" << 'XACRO_EOF'
 <?xml version="1.0"?>
 <robot xmlns:xacro="http://wiki.ros.org/xacro" name="ur">
   <xacro:include filename="$(find ur_description)/urdf/ur.urdf.xacro" />
@@ -50,9 +51,6 @@ cat > "$WRAPPER_XACRO" << 'XACRO_EOF'
   <gazebo reference="wrist_3_link"><self_collide>true</self_collide></gazebo>
 </robot>
 XACRO_EOF
-# Symlink into ur_description so FindPackageShare can find it
-ln -sf "$WRAPPER_XACRO" "$UR_DESC_DIR/urdf/ur_self_collide.urdf.xacro" 2>/dev/null || \
-  cp "$WRAPPER_XACRO" "$UR_DESC_DIR/urdf/ur_self_collide.urdf.xacro"
 
 ros2 launch ur_simulation_gz ur_sim_control.launch.py \
     ur_type:="$UR_TYPE" \
