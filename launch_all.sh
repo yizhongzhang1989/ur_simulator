@@ -30,17 +30,14 @@ pkill -f "robot_state_publisher" 2>/dev/null || true
 pkill -f "rosbridge_websocket" 2>/dev/null || true
 sleep 2
 
-# Start Gazebo simulation (headless) with self-collision enabled
+# Start Gazebo simulation (headless)
 echo "[2/3] Starting Gazebo simulation (headless)..."
 WORLD_FILE="$WS_DIR/src/ur_web_dashboard/worlds/no_ground_collision.sdf"
-
 ros2 launch ur_simulation_gz ur_sim_control.launch.py \
     ur_type:="$UR_TYPE" \
     gazebo_gui:=false \
     launch_rviz:=false \
-    world_file:="$WORLD_FILE" \
-    description_package:=ur_sim_config \
-    description_file:=ur_self_collide.urdf.xacro &
+    world_file:="$WORLD_FILE" &
 SIM_PID=$!
 
 # Wait for simulation to be ready
