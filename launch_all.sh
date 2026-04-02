@@ -34,30 +34,11 @@ sleep 2
 echo "[2/3] Starting Gazebo simulation (headless)..."
 WORLD_FILE="$WS_DIR/src/ur_web_dashboard/worlds/no_ground_collision.sdf"
 
-# Create a wrapper xacro that adds self-collision tags
-# Place it in the workspace install overlay so FindPackageShare resolves it
-OVERLAY_URDF_DIR="$WS_DIR/install/ur_description/share/ur_description/urdf"
-mkdir -p "$OVERLAY_URDF_DIR"
-cat > "$OVERLAY_URDF_DIR/ur_self_collide.urdf.xacro" << 'XACRO_EOF'
-<?xml version="1.0"?>
-<robot xmlns:xacro="http://wiki.ros.org/xacro" name="ur">
-  <xacro:include filename="$(find ur_description)/urdf/ur.urdf.xacro" />
-  <gazebo reference="base_link_inertia"><self_collide>true</self_collide></gazebo>
-  <gazebo reference="shoulder_link"><self_collide>true</self_collide></gazebo>
-  <gazebo reference="upper_arm_link"><self_collide>true</self_collide></gazebo>
-  <gazebo reference="forearm_link"><self_collide>true</self_collide></gazebo>
-  <gazebo reference="wrist_1_link"><self_collide>true</self_collide></gazebo>
-  <gazebo reference="wrist_2_link"><self_collide>true</self_collide></gazebo>
-  <gazebo reference="wrist_3_link"><self_collide>true</self_collide></gazebo>
-</robot>
-XACRO_EOF
-
 ros2 launch ur_simulation_gz ur_sim_control.launch.py \
     ur_type:="$UR_TYPE" \
     gazebo_gui:=false \
     launch_rviz:=false \
-    world_file:="$WORLD_FILE" \
-    description_file:=ur_self_collide.urdf.xacro &
+    world_file:="$WORLD_FILE" &
 SIM_PID=$!
 
 # Wait for simulation to be ready
