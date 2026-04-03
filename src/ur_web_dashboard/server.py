@@ -6,15 +6,33 @@ import sys
 
 PORT = int(sys.argv[1]) if len(sys.argv) > 1 else 8080
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-WORKSPACE = os.path.dirname(os.path.dirname(SCRIPT_DIR))  # ur_sim root
+
+# Resolve ur_description mesh directory: prefer system ROS package, fall back to submodule
+def _find_ur_description_dir():
+    """Find ur_description share directory from system package or submodule."""
+    try:
+        import subprocess
+        result = subprocess.run(
+            ['ros2', 'pkg', 'prefix', 'ur_description'],
+            capture_output=True, text=True, timeout=5)
+        if result.returncode == 0:
+            d = os.path.join(result.stdout.strip(), 'share', 'ur_description')
+            if os.path.isdir(d):
+                return d
+    except Exception:
+        pass
+    workspace = os.path.dirname(os.path.dirname(SCRIPT_DIR))
+    return os.path.join(workspace, 'src', 'ur_description')
+
+UR_DESCRIPTION_DIR = _find_ur_description_dir()
 
 
 class URDashboardHandler(http.server.SimpleHTTPRequestHandler):
     def translate_path(self, path):
-        # Serve /ur_description/* from the ur_description submodule
+        # Serve /ur_description/* from system package or submodule
         if path.startswith('/ur_description/'):
             rel = path[len('/ur_description/'):]
-            return os.path.join(WORKSPACE, 'src', 'ur_description', rel)
+            return os.path.join(UR_DESCRIPTION_DIR, rel)
         # Everything else from the dashboard directory
         return os.path.join(SCRIPT_DIR, path.lstrip('/'))
 
@@ -35,5 +53,5 @@ if __name__ == '__main__':
     with http.server.HTTPServer(('0.0.0.0', PORT), URDashboardHandler) as httpd:
         print(f'UR Dashboard server on http://0.0.0.0:{PORT}')
         print(f'  Dashboard: {SCRIPT_DIR}')
-        print(f'  Meshes:    {os.path.join(WORKSPACE, "src", "ur_description")}')
+        print(f'  Meshes:    {UR_DESCRIPTION_DIR}')
         httpd.serve_forever()

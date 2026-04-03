@@ -17,12 +17,17 @@ WS_DIR="$SCRIPT_DIR"
 # Default values
 CONTROL_MODE="position"
 CONFIG_FILE=""
+CONTROLLERS_FILE=""
 
 # Parse arguments
 while [[ $# -gt 0 ]]; do
     case $1 in
         --control_mode)
             CONTROL_MODE="$2"
+            shift 2
+            ;;
+        --controllers_file)
+            CONTROLLERS_FILE="$2"
             shift 2
             ;;
         *)
@@ -61,7 +66,7 @@ UR_TYPE="${UR_TYPE:-ur5e}"
 GAZEBO_GUI="${GAZEBO_GUI:-false}"
 LAUNCH_RVIZ="${LAUNCH_RVIZ:-false}"
 ROSBRIDGE_PORT="${ROSBRIDGE_PORT:-9090}"
-DASHBOARD_PORT="${DASHBOARD_PORT:-8080}"
+DASHBOARD_PORT="${DASHBOARD_PORT:-8000}"
 
 # Resolve world file path
 if [[ "$WORLD_FILE_CFG" == /* ]]; then
@@ -93,7 +98,7 @@ sleep 2
 
 # Generate static URDFs for the 3D viewer (if missing)
 URDF_DIR="$WS_DIR/src/ur_web_dashboard/urdf"
-XACRO_FILE="$WS_DIR/src/ur_description/urdf/ur.urdf.xacro"
+XACRO_FILE="$(ros2 pkg prefix ur_description)/share/ur_description/urdf/ur.urdf.xacro"
 if [ ! -f "$URDF_DIR/$UR_TYPE.urdf" ]; then
     echo "[2/4] Generating static URDFs for 3D viewer..."
     mkdir -p "$URDF_DIR"
@@ -111,11 +116,16 @@ fi
 # Start Gazebo simulation with selected control mode
 echo "[3/4] Starting Gazebo simulation..."
 if [ "$CONTROL_MODE" = "effort" ]; then
-    ros2 launch ur_sim_config ur_sim_effort.launch.py \
-        ur_type:="$UR_TYPE" \
-        gazebo_gui:="$GAZEBO_GUI" \
-        launch_rviz:="$LAUNCH_RVIZ" \
-        world_file:="$WORLD_FILE" &
+    EFFORT_ARGS=(
+        ur_type:="$UR_TYPE"
+        gazebo_gui:="$GAZEBO_GUI"
+        launch_rviz:="$LAUNCH_RVIZ"
+        world_file:="$WORLD_FILE"
+    )
+    if [ -n "$CONTROLLERS_FILE" ]; then
+        EFFORT_ARGS+=(controllers_file:="$CONTROLLERS_FILE")
+    fi
+    ros2 launch ur_sim_config ur_sim_effort.launch.py "${EFFORT_ARGS[@]}" &
 else
     ros2 launch ur_simulation_gz ur_sim_control.launch.py \
         ur_type:="$UR_TYPE" \
