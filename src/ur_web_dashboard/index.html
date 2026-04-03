@@ -397,8 +397,6 @@
                     if (tool0) {
                         if (tcpAxes) tcpAxes.parent?.remove(tcpAxes);
                         tcpAxes = new THREE.AxesHelper(0.1);
-                        tcpAxes.renderOrder = 999;
-                        tcpAxes.material.depthTest = false;
                         tool0.add(tcpAxes);
                     }
 
