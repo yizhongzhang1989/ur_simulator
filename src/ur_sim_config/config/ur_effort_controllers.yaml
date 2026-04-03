@@ -2,6 +2,9 @@
 # Used when --control_mode effort is passed to launch_all.sh.
 # Matches the official ur_simulation_gz controller set where applicable,
 # plus forward_effort_controller for external torque-based controllers (e.g. CRISP).
+#
+# External callers can provide their own controllers YAML via the
+# controllers_file argument in ur_sim_effort.launch.py to add custom controllers.
 
 controller_manager:
   ros__parameters:

@@ -37,11 +37,10 @@ def launch_setup(context, *args, **kwargs):
     launch_rviz = LaunchConfiguration("launch_rviz")
     gazebo_gui = LaunchConfiguration("gazebo_gui")
     world_file = LaunchConfiguration("world_file")
+    controllers_file = LaunchConfiguration("controllers_file")
 
-    # Use our effort controllers config
-    initial_joint_controllers = PathJoinSubstitution(
-        [FindPackageShare("ur_sim_config"), "config", "ur_effort_controllers.yaml"]
-    )
+    # Use the provided controllers config (default: ur_sim_config's built-in)
+    initial_joint_controllers = controllers_file
 
     rviz_config_file = PathJoinSubstitution(
         [FindPackageShare("ur_description"), "rviz", "view_robot.rviz"]
@@ -243,6 +242,15 @@ def generate_launch_description():
     )
     declared_arguments.append(
         DeclareLaunchArgument("world_file", default_value="empty.sdf")
+    )
+    declared_arguments.append(
+        DeclareLaunchArgument(
+            "controllers_file",
+            default_value=PathJoinSubstitution(
+                [FindPackageShare("ur_sim_config"), "config", "ur_effort_controllers.yaml"]
+            ),
+            description="Path to controllers YAML. Override to add custom controllers.",
+        )
     )
     return LaunchDescription(
         declared_arguments + [OpaqueFunction(function=launch_setup)]

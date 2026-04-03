@@ -9,7 +9,8 @@ to set up the environment, the AI should follow these instructions.
 Workspace root: the directory containing this file
 ROS distro:     Humble (Ubuntu 22.04)
 Build system:   colcon
-Submodules:     ur_simulation_gz (Gazebo sim), ur_description (URDF + meshes)
+Submodules:     ur_simulation_gz (Gazebo sim)
+System package: ur_description (URDF + meshes, from ros-humble-ur-description)
 One-command:    ./launch_all.sh
 Config:         config/config.yaml (auto-generated from config/config.template.yaml)
 ```
@@ -43,7 +44,10 @@ If the repo was cloned without `--recurse-submodules`:
 git submodule update --init --recursive
 ```
 
-Verify: `src/ur_simulation_gz/` and `src/ur_description/` should be non-empty.
+Verify: `src/ur_simulation_gz/` should be non-empty.
+
+Note: `ur_description` is NOT a submodule — it uses the system package
+`ros-humble-ur-description` (installed in Step 3).
 
 ### Step 3: Install apt dependencies
 
@@ -55,8 +59,6 @@ sudo apt-get install -y \
   ros-humble-ur-description \
   ros-humble-ros2-control \
   ros-humble-ros2-controllers \
-  ros-humble-moveit \
-  ros-humble-ur-moveit-config \
   ros-humble-rosbridge-suite
 ```
 
@@ -92,7 +94,7 @@ This will:
 4. Start rosbridge WebSocket server
 5. Start the web dashboard
 
-Open `http://localhost:8080` in a browser.
+Open `http://localhost:8000` in a browser.
 
 **Headless environment (no X display):** The default config already sets
 `gazebo_gui: false` and `launch_rviz: false`. No changes needed.
@@ -120,14 +122,14 @@ Edit `config/config.yaml` to change settings. Key parameters:
 | `launch_rviz` | `false` | Launch RViz (requires X display) |
 | `world_file` | `no_ground_collision.sdf` | Gazebo world file |
 | `rosbridge_port` | `9090` | rosbridge WebSocket port |
-| `dashboard_port` | `8080` | Web dashboard HTTP port |
+| `dashboard_port` | `8000` | Web dashboard HTTP port |
 
 ---
 
 ## Architecture
 
 ```
-Browser (HTTP)       <--:8080--> server.py (static files + mesh routing)
+Browser (HTTP)       <--:8000--> server.py (static files + mesh routing)
 Browser (WebSocket)  <--:9090--> rosbridge_websocket <--ROS 2--> Gazebo Ignition
 ```
 
@@ -180,7 +182,7 @@ File: `src/ur_web_dashboard/index.html` (single-page, no build step)
 - `/` → `index.html`
 - `/lib/` → vendored JS libraries
 - `/urdf/` → generated static URDFs
-- `/ur_description/` → submodule meshes (`.dae`, `.stl`)
+- `/ur_description/` → UR mesh files (from system `ros-humble-ur-description` package)
 
 Use `server.py` instead of `python3 -m http.server` — the latter can't serve meshes.
 
@@ -194,7 +196,6 @@ Use `server.py` instead of `python3 -m http.server` — the latter can't serve m
 │   └── config.yaml                # User config (gitignored, auto-generated)
 ├── src/
 │   ├── ur_simulation_gz/          # Git submodule: UR Gazebo sim
-│   ├── ur_description/            # Git submodule: UR URDF + meshes
 │   └── ur_web_dashboard/
 │       ├── index.html             # Dashboard app
 │       ├── server.py              # HTTP server
@@ -214,11 +215,9 @@ Use `server.py` instead of `python3 -m http.server` — the latter can't serve m
 |---|---|
 | `ros-humble-ros-gz` | Gazebo Ignition Fortress + ROS bridge |
 | `ros-humble-gz-ros2-control` | Gazebo hardware interface plugin |
-| `ros-humble-ur-description` | UR robot URDF (fallback if submodule missing) |
+| `ros-humble-ur-description` | UR robot URDF + meshes (required) |
 | `ros-humble-ros2-control` | Controller manager framework |
 | `ros-humble-ros2-controllers` | JointTrajectoryController, JointStateBroadcaster |
-| `ros-humble-moveit` | Motion planning (optional) |
-| `ros-humble-ur-moveit-config` | UR-specific MoveIt config (optional) |
 | `ros-humble-rosbridge-suite` | WebSocket bridge to ROS 2 |
 
 ## Troubleshooting

@@ -2,7 +2,3 @@
 	path = src/ur_simulation_gz
 	url = https://github.com/UniversalRobots/Universal_Robots_ROS2_GZ_Simulation.git
 	branch = humble
-[submodule "src/ur_description"]
-	path = src/ur_description
-	url = https://github.com/UniversalRobots/Universal_Robots_ROS2_Description.git
-	branch = humble

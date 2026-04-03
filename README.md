@@ -42,8 +42,6 @@ sudo apt-get install -y \
   ros-humble-ros2-control \
   ros-humble-ros2-controllers \
   ros-humble-pinocchio \
-  ros-humble-moveit \
-  ros-humble-ur-moveit-config \
   ros-humble-rosbridge-suite
 
 source /opt/ros/humble/setup.bash
@@ -69,9 +67,9 @@ URDFs are generated for the 3D viewer. Edit config to customize settings.
 This starts:
 - Gazebo simulation (headless by default) on ROS 2
 - rosbridge WebSocket server (port **9090**)
-- Web dashboard (port **8080**)
+- Web dashboard (port **8000**)
 
-Open `http://localhost:8080` in a browser.
+Open `http://localhost:8000` in a browser.
 
 ## Configuration
 
@@ -83,7 +81,7 @@ gazebo_gui: false              # Show Gazebo GUI (requires X display)
 launch_rviz: false             # Launch RViz (requires X display)
 world_file: no_ground_collision.sdf  # Gazebo world file
 rosbridge_port: 9090           # rosbridge WebSocket port
-dashboard_port: 8080           # Web dashboard HTTP port
+dashboard_port: 8000           # Web dashboard HTTP port
 ```
 
 
@@ -100,13 +98,16 @@ You can select the robot control mode at launch time using the `--control_mode` 
 
 # You can also specify a config file:
 ./launch_all.sh --control_mode effort path/to/config.yaml
+
+# You can also provide a custom controllers YAML (for external controllers like CRISP):
+./launch_all.sh --control_mode effort --controllers_file /path/to/custom_controllers.yaml
 ```
 
 If no flag is given, position mode is used by default. See below for details on each mode.
 
 ---
 
-Usage: `./launch_all.sh` (default config) or `./launch_all.sh [--control_mode position|effort] [path/to/config.yaml]`
+Usage: `./launch_all.sh` (default config) or `./launch_all.sh [--control_mode position|effort] [--controllers_file path/to/controllers.yaml] [path/to/config.yaml]`
 
 
 ## Control Modes Explained
@@ -160,7 +161,7 @@ ros2 launch ur_sim_config ur_sim_effort.launch.py ur_type:=ur5e gazebo_gui:=fals
 ros2 launch rosbridge_server rosbridge_websocket_launch.xml
 
 # Web dashboard (separate terminal)
-cd src/ur_web_dashboard && python3 server.py 8080
+cd src/ur_web_dashboard && python3 server.py 8000
 ```
 
 ## Web Dashboard
@@ -179,7 +180,7 @@ cd src/ur_web_dashboard && python3 server.py 8080
 ## Architecture
 
 ```
-Browser <--:8080--> server.py (static files + mesh routing)
+Browser <--:8000--> server.py (static files + mesh routing)
 Browser <--:9090--> rosbridge_websocket <--ROS 2--> Gazebo Ignition
 ```
 
@@ -196,7 +197,6 @@ Browser <--:9090--> rosbridge_websocket <--ROS 2--> Gazebo Ignition
 │   │   ├── launch/ur_sim_effort.launch.py
 │   │   └── urdf/generate_effort_urdf.sh
 │   ├── ur_simulation_gz/          # Git submodule: UR Gazebo simulation
-│   ├── ur_description/            # Git submodule: UR URDF + meshes
 │   └── ur_web_dashboard/          # Web dashboard
 │       ├── index.html             # Single-page dashboard app
 │       ├── server.py              # HTTP server (dashboard + mesh routing)
@@ -220,5 +220,4 @@ and verification.
 ## License
 
 - `ur_simulation_gz`: BSD-3-Clause (Universal Robots)
-- `ur_description`: BSD-3-Clause (Universal Robots)
 - Web dashboard and scripts: MIT
