@@ -11,6 +11,7 @@ ROS distro:     Humble (Ubuntu 22.04)
 Build system:   colcon
 Submodules:     ur_simulation_gz (Gazebo sim)
 System package: ur_description (URDF + meshes, from ros-humble-ur-description)
+Simulators:     Gazebo Ignition Fortress (default), MuJoCo (optional)
 One-command:    ./launch_all.sh
 Config:         config/config.yaml (auto-generated from config/config.template.yaml)
 ```
@@ -59,7 +60,15 @@ sudo apt-get install -y \
   ros-humble-ur-description \
   ros-humble-ros2-control \
   ros-humble-ros2-controllers \
+  ros-humble-pinocchio \
   ros-humble-rosbridge-suite
+```
+
+For MuJoCo support (optional):
+
+```bash
+sudo apt-get install -y \
+  ros-humble-mujoco-ros2-control
 ```
 
 Then install any remaining rosdep keys:
@@ -74,7 +83,7 @@ resolves to `0.0.0.0`), skip it — the cached rosdep database is sufficient.
 
 ### Step 4: Build
 
-Only `ur_simulation_gz` needs source building (~1 second):
+`ur_simulation_gz` and `ur_sim_config` need source building:
 
 ```bash
 source /opt/ros/humble/setup.bash
@@ -84,7 +93,17 @@ colcon build --symlink-install
 ### Step 5: Launch
 
 ```bash
+# Default: Gazebo position mode
 ./launch_all.sh
+
+# Gazebo effort mode (for external torque controllers)
+./launch_all.sh --control_mode effort
+
+# MuJoCo position mode
+./launch_all.sh --simulator mujoco
+
+# MuJoCo effort mode
+./launch_all.sh --simulator mujoco --control_mode effort
 ```
 
 This will:
@@ -106,8 +125,20 @@ In a separate terminal:
 ```bash
 source /opt/ros/humble/setup.bash
 ros2 topic echo /joint_states --once   # Should show 6 joint positions
-ros2 control list_controllers          # Should list 2 active controllers
+ros2 control list_controllers          # Should list active controllers
 ```
+
+Expected controllers by mode:
+
+| Mode | Active Controllers |
+|---|---|
+| Gazebo position | `joint_state_broadcaster`, `joint_trajectory_controller` |
+| Gazebo effort | `joint_state_broadcaster`, `forward_effort_controller` + 3 inactive |
+| MuJoCo (any) | `joint_state_broadcaster`, `forward_effort_controller` + 3 inactive |
+
+Note: MuJoCo always runs in effort mode internally (motor actuators + gravity
+compensation via Pinocchio). The `--control_mode` flag only affects which
+controllers are active in Gazebo.
 
 ---
 
@@ -128,17 +159,29 @@ Edit `config/config.yaml` to change settings. Key parameters:
 
 ## Architecture
 
+### Gazebo Mode
 ```
 Browser (HTTP)       <--:8000--> server.py (static files + mesh routing)
 Browser (WebSocket)  <--:9090--> rosbridge_websocket <--ROS 2--> Gazebo Ignition
 ```
+
+### MuJoCo Mode
+```
+Browser (HTTP)       <--:8000--> server.py (static files + mesh routing)
+Browser (WebSocket)  <--:9090--> rosbridge_websocket <--ROS 2--> mujoco_ros2_control
+                                                               + gravity_compensation.py
+```
+
+Both modes expose the same ROS 2 interface — the web dashboard works identically.
 
 ### ROS 2 Interfaces
 
 | Interface | Type | Description |
 |---|---|---|
 | `/joint_states` | sensor_msgs/JointState | Joint positions, velocities, efforts |
-| `/joint_trajectory_controller/joint_trajectory` | trajectory_msgs/JointTrajectory | Send trajectory commands |
+| `/joint_trajectory_controller/joint_trajectory` | trajectory_msgs/JointTrajectory | Send trajectory commands (works in all modes) |
+| `/forward_effort_controller/commands` | std_msgs/Float64MultiArray | Direct effort commands (effort mode) |
+| `/external_effort_commands` | std_msgs/Float64MultiArray | External torques added to gravity comp (effort mode) |
 | `/joint_trajectory_controller/follow_joint_trajectory` | action | Trajectory with feedback |
 | `/controller_manager/list_controllers` | service | List active controllers |
 | `/clock` | rosgraph_msgs/Clock | Simulation time |
@@ -195,6 +238,14 @@ Use `server.py` instead of `python3 -m http.server` — the latter can't serve m
 │   ├── config.template.yaml       # Configuration template (tracked)
 │   └── config.yaml                # User config (gitignored, auto-generated)
 ├── src/
+│   ├── ur_sim_config/             # Effort mode, gravity comp, MuJoCo support
+│   │   ├── scripts/gravity_compensation.py  # Pinocchio gravity comp + PID
+│   │   ├── scripts/generate_mujoco_model.sh # URDF→MJCF converter
+│   │   ├── config/ur_effort_controllers.yaml
+│   │   ├── launch/ur_sim_effort.launch.py   # Gazebo effort mode
+│   │   ├── launch/ur_sim_mujoco.launch.py   # MuJoCo (any mode)
+│   │   ├── mujoco/                          # Generated MJCF (auto, gitignored)
+│   │   └── urdf/generate_effort_urdf.sh     # Gazebo URDF patcher
 │   ├── ur_simulation_gz/          # Git submodule: UR Gazebo sim
 │   └── ur_web_dashboard/
 │       ├── index.html             # Dashboard app
@@ -218,7 +269,9 @@ Use `server.py` instead of `python3 -m http.server` — the latter can't serve m
 | `ros-humble-ur-description` | UR robot URDF + meshes (required) |
 | `ros-humble-ros2-control` | Controller manager framework |
 | `ros-humble-ros2-controllers` | JointTrajectoryController, JointStateBroadcaster |
+| `ros-humble-pinocchio` | Rigid body dynamics (gravity compensation) |
 | `ros-humble-rosbridge-suite` | WebSocket bridge to ROS 2 |
+| `ros-humble-mujoco-ros2-control` | MuJoCo physics backend (optional) |
 
 ## Troubleshooting
 
@@ -230,3 +283,7 @@ Use `server.py` instead of `python3 -m http.server` — the latter can't serve m
 | URDF 404 on dashboard | URDFs not generated. Delete `src/ur_web_dashboard/urdf/` and rerun `./launch_all.sh` |
 | Port already in use | Kill old processes: `pkill -9 -f "ign gazebo"; pkill -9 -f rosbridge; pkill -9 -f server.py` |
 | Stale Gazebo preventing restart | `pkill -9 -f "ign gazebo"` then wait 2 seconds |
+| MuJoCo: GLFW warning | Normal in headless mode (no display). Camera publishing disabled but sim works |
+| MuJoCo: "Failed to initialize GLFW" | Headless environment — expected, no action needed |
+| MuJoCo: MJCF not found | Delete `install/ur_sim_config/share/ur_sim_config/mujoco/` and rebuild |
+| MuJoCo: joint not moving | Ensure MJCF was regenerated after script changes (`rm -rf install/.../mujoco/ur5e`) |
