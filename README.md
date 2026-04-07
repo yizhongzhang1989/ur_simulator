@@ -5,6 +5,7 @@ A ROS 2 simulation environment for Universal Robots (UR3, UR5e, UR10e, UR16e, UR
 ## Features
 
 - **Gazebo Ignition Fortress** physics simulation (headless supported)
+- **MuJoCo** physics simulation (alternative backend, headless supported)
 - **ros2_control** integration with `joint_trajectory_controller`
 - **Effort (torque) mode** with Pinocchio gravity compensation for external controllers (e.g. CRISP)
 - **3D visualization** of the robot in the browser (Three.js + urdf-loader)
@@ -87,27 +88,33 @@ dashboard_port: 8000           # Web dashboard HTTP port
 
 ## Launch Modes: Position vs Effort
 
-You can select the robot control mode at launch time using the `--control_mode` flag:
+You can select the robot control mode and physics engine at launch time:
 
 ```bash
-# Position mode (default, robust position control)
-./launch_all.sh --control_mode position
+# Position mode with Gazebo (default)
+./launch_all.sh
 
-# Effort mode (for external torque-based controllers, e.g. CRISP)
+# Effort mode with Gazebo
 ./launch_all.sh --control_mode effort
 
+# Position mode with MuJoCo
+./launch_all.sh --simulator mujoco
+
+# Effort mode with MuJoCo
+./launch_all.sh --simulator mujoco --control_mode effort
+
 # You can also specify a config file:
-./launch_all.sh --control_mode effort path/to/config.yaml
+./launch_all.sh --simulator mujoco --control_mode effort path/to/config.yaml
 
 # You can also provide a custom controllers YAML (for external controllers like CRISP):
 ./launch_all.sh --control_mode effort --controllers_file /path/to/custom_controllers.yaml
 ```
 
-If no flag is given, position mode is used by default. See below for details on each mode.
+If no flags are given, Gazebo with position mode is used by default.
 
 ---
 
-Usage: `./launch_all.sh` (default config) or `./launch_all.sh [--control_mode position|effort] [--controllers_file path/to/controllers.yaml] [path/to/config.yaml]`
+Usage: `./launch_all.sh [--simulator gazebo|mujoco] [--control_mode position|effort] [--controllers_file path/to/controllers.yaml] [path/to/config.yaml]`
 
 
 ## Control Modes Explained

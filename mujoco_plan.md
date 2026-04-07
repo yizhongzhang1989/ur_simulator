@@ -5,15 +5,15 @@ User selects via `--simulator gazebo|mujoco` flag in `launch_all.sh`.
 
 ## Status
 
-- [ ] 1. Install `ros-humble-mujoco-ros2-control` dependencies
-- [ ] 2. Create MJCF generation script (`generate_mujoco_model.sh`)
-- [ ] 3. Create `mujoco_inputs.xml` with UR-specific MuJoCo settings
-- [ ] 4. Create `ur_sim_mujoco.launch.py` (effort mode)
-- [ ] 5. Create `ur_sim_mujoco_position.launch.py` (position mode)
-- [ ] 6. Add `--simulator` flag to `launch_all.sh`
-- [ ] 7. Test position mode (joint trajectory via web dashboard)
-- [ ] 8. Test effort mode (gravity comp, trajectory, stability)
-- [ ] 9. Update README, config, and documentation
+- [x] 1. Install `ros-humble-mujoco-ros2-control` dependencies
+- [x] 2. Create MJCF generation script (`generate_mujoco_model.sh`)
+- [x] 3. Create `mujoco_inputs.xml` with UR-specific MuJoCo settings
+- [x] 4. Create `ur_sim_mujoco.launch.py` (effort mode)
+- [x] 5. Create `ur_sim_mujoco.launch.py` (position mode — unified in one file)
+- [x] 6. Add `--simulator` flag to `launch_all.sh`
+- [x] 7. Test position mode (joint trajectory via action — succeeded)
+- [x] 8. Test effort mode (gravity comp, trajectory, stability — all passed)
+- [x] 9. Update README, config, and documentation
 
 ## Key Differences: Gazebo vs MuJoCo
 
