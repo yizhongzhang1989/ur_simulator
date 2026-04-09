@@ -17,7 +17,7 @@ WS_DIR="$SCRIPT_DIR"
 
 # Default values
 CONTROL_MODE="position"
-SIMULATOR="gazebo"
+SIMULATOR="mujoco"
 CONFIG_FILE=""
 CONTROLLERS_FILE=""
 

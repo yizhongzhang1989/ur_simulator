@@ -91,26 +91,26 @@ dashboard_port: 8000           # Web dashboard HTTP port
 You can select the robot control mode and physics engine at launch time:
 
 ```bash
-# Position mode with Gazebo (default)
+# Position mode with MuJoCo (default)
 ./launch_all.sh
 
-# Effort mode with Gazebo
+# Effort mode with MuJoCo
 ./launch_all.sh --control_mode effort
 
-# Position mode with MuJoCo
-./launch_all.sh --simulator mujoco
+# Position mode with Gazebo
+./launch_all.sh --simulator gazebo
 
-# Effort mode with MuJoCo
-./launch_all.sh --simulator mujoco --control_mode effort
+# Effort mode with Gazebo
+./launch_all.sh --simulator gazebo --control_mode effort
 
 # You can also specify a config file:
-./launch_all.sh --simulator mujoco --control_mode effort path/to/config.yaml
+./launch_all.sh --control_mode effort path/to/config.yaml
 
 # You can also provide a custom controllers YAML (for external controllers like CRISP):
 ./launch_all.sh --control_mode effort --controllers_file /path/to/custom_controllers.yaml
 ```
 
-If no flags are given, Gazebo with position mode is used by default.
+If no flags are given, MuJoCo with position mode is used by default.
 
 ---
 
