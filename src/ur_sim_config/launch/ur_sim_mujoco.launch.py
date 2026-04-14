@@ -105,6 +105,25 @@ def launch_setup(context, *args, **kwargs):
     )
 
     # MuJoCo ros2_control node (replaces Gazebo)
+    # PID gains for position control on motor actuators.
+    # mujoco_ros2_control uses these to convert position commands → effort.
+    # The gravity_compensation node provides feedforward torques, so PID only
+    # handles tracking error — keep gains moderate to avoid oscillation.
+    _jn = ["shoulder_pan_joint", "shoulder_lift_joint", "elbow_joint",
+           "wrist_1_joint", "wrist_2_joint", "wrist_3_joint"]
+    _pg = {"shoulder_pan_joint": (800,20,80), "shoulder_lift_joint": (800,20,80),
+           "elbow_joint": (800,20,80), "wrist_1_joint": (200,5,20),
+           "wrist_2_joint": (200,5,20), "wrist_3_joint": (200,5,20)}
+    pid_params = {}
+    for name in _jn:
+        p, i, d = _pg[name]
+        pid_params[f"pid_gains.position.{name}.p"] = float(p)
+        pid_params[f"pid_gains.position.{name}.i"] = float(i)
+        pid_params[f"pid_gains.position.{name}.d"] = float(d)
+        pid_params[f"pid_gains.position.{name}.i_clamp_max"] = 150.0
+        pid_params[f"pid_gains.position.{name}.i_clamp_min"] = -150.0
+        pid_params[f"pid_gains.position.{name}.antiwindup"] = True
+
     control_node = Node(
         package="mujoco_ros2_control",
         executable="ros2_control_node",
@@ -113,6 +132,7 @@ def launch_setup(context, *args, **kwargs):
         parameters=[
             {"use_sim_time": True},
             ParameterFile(controllers_file_cfg),
+            pid_params,
         ],
         remappings=[("~/robot_description", "/robot_description")],
         on_exit=Shutdown(),
@@ -211,12 +231,11 @@ def _build_ros2_control_block(scene_file, control_mode, headless):
     initial_positions = [0.0, -1.57, 0.0, -1.57, 0.0, 0.0]
 
     for name, init_pos in zip(joint_names, initial_positions):
-        # MuJoCo always uses motor actuators → effort command interface
-        cmd = '      <command_interface name="effort"/>'
-
+        # Expose both position and effort command interfaces (like real UR driver)
         joints_xml += f"""
     <joint name="{name}">
-{cmd}
+      <command_interface name="position"/>
+      <command_interface name="effort"/>
       <state_interface name="position">
         <param name="initial_value">{init_pos}</param>
       </state_interface>
