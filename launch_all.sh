@@ -5,8 +5,9 @@
 # 3. Web dashboard
 #
 
-# Usage: ./launch_all.sh [--control_mode position|effort] [config_file]
+# Usage: ./launch_all.sh [--control_mode position|effort] [--simulator gazebo|mujoco] [config_file]
 #   --control_mode: position (default) or effort
+#   --simulator: gazebo (default) or mujoco
 #   config_file: path to config YAML (default: config/config.yaml)
 
 set -e
@@ -16,6 +17,7 @@ WS_DIR="$SCRIPT_DIR"
 
 # Default values
 CONTROL_MODE="position"
+SIMULATOR="mujoco"
 CONFIG_FILE=""
 CONTROLLERS_FILE=""
 
@@ -24,6 +26,10 @@ while [[ $# -gt 0 ]]; do
     case $1 in
         --control_mode)
             CONTROL_MODE="$2"
+            shift 2
+            ;;
+        --simulator)
+            SIMULATOR="$2"
             shift 2
             ;;
         --controllers_file)
@@ -78,6 +84,7 @@ fi
 echo "=== UR Robot Simulator ==="
 echo "Config:       $CONFIG_FILE"
 echo "Robot type:   $UR_TYPE"
+echo "Simulator:    $SIMULATOR"
 echo "Control mode: $CONTROL_MODE"
 echo "Gazebo GUI:   $GAZEBO_GUI"
 echo "World:        $WORLD_FILE"
@@ -91,6 +98,7 @@ source "$WS_DIR/install/setup.bash" 2>/dev/null || true
 # Kill any existing processes
 echo "[1/4] Cleaning up old processes..."
 pkill -f "ign gazebo" 2>/dev/null || true
+pkill -f "ros2_control_node" 2>/dev/null || true
 pkill -f "parameter_bridge" 2>/dev/null || true
 pkill -f "robot_state_publisher" 2>/dev/null || true
 pkill -f "rosbridge_websocket" 2>/dev/null || true
@@ -113,9 +121,20 @@ else
 fi
 
 
-# Start Gazebo simulation with selected control mode
-echo "[3/4] Starting Gazebo simulation..."
-if [ "$CONTROL_MODE" = "effort" ]; then
+# Start simulation with selected simulator and control mode
+echo "[3/4] Starting $SIMULATOR simulation ($CONTROL_MODE mode)..."
+if [ "$SIMULATOR" = "mujoco" ]; then
+    MUJOCO_ARGS=(
+        ur_type:="$UR_TYPE"
+        control_mode:="$CONTROL_MODE"
+        headless:=true
+        launch_rviz:="$LAUNCH_RVIZ"
+    )
+    if [ -n "$CONTROLLERS_FILE" ]; then
+        MUJOCO_ARGS+=(controllers_file:="$CONTROLLERS_FILE")
+    fi
+    ros2 launch ur_sim_config ur_sim_mujoco.launch.py "${MUJOCO_ARGS[@]}" &
+elif [ "$CONTROL_MODE" = "effort" ]; then
     EFFORT_ARGS=(
         ur_type:="$UR_TYPE"
         gazebo_gui:="$GAZEBO_GUI"
@@ -162,7 +181,7 @@ echo "Press Ctrl+C to stop all services."
 echo ""
 
 cd "$WS_DIR/src/ur_web_dashboard"
-python3 server.py "$DASHBOARD_PORT" &
+python3 server.py "$DASHBOARD_PORT" "$ROSBRIDGE_PORT" &
 WEB_PID=$!
 
 # Cleanup on exit
@@ -173,6 +192,7 @@ cleanup() {
     kill $BRIDGE_PID 2>/dev/null
     kill $SIM_PID 2>/dev/null
     pkill -f "ign gazebo" 2>/dev/null || true
+    pkill -f "ros2_control_node" 2>/dev/null || true
     pkill -f "parameter_bridge" 2>/dev/null || true
     pkill -f "rosbridge_websocket" 2>/dev/null || true
     echo "Done."

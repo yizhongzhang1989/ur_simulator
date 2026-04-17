@@ -4,7 +4,8 @@ import http.server
 import os
 import sys
 
-PORT = int(sys.argv[1]) if len(sys.argv) > 1 else 8080
+PORT = int(sys.argv[1]) if len(sys.argv) > 1 else 8000
+ROSBRIDGE_PORT = int(sys.argv[2]) if len(sys.argv) > 2 else 9090
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 
 # Resolve ur_description mesh directory: prefer system ROS package, fall back to submodule
@@ -29,12 +30,30 @@ UR_DESCRIPTION_DIR = _find_ur_description_dir()
 
 class URDashboardHandler(http.server.SimpleHTTPRequestHandler):
     def translate_path(self, path):
+        # Serve /config.json with runtime configuration
+        if path == '/config.json':
+            return None  # handled in do_GET
         # Serve /ur_description/* from system package or submodule
         if path.startswith('/ur_description/'):
             rel = path[len('/ur_description/'):]
             return os.path.join(UR_DESCRIPTION_DIR, rel)
         # Everything else from the dashboard directory
         return os.path.join(SCRIPT_DIR, path.lstrip('/'))
+
+    def do_GET(self):
+        if self.path == '/config.json':
+            import json
+            config = json.dumps({
+                'rosbridge_port': ROSBRIDGE_PORT,
+                'rosbridge_url': f'ws://{self.headers.get("Host", "localhost").split(":")[0]}:{ROSBRIDGE_PORT}',
+            })
+            self.send_response(200)
+            self.send_header('Content-Type', 'application/json')
+            self.send_header('Content-Length', len(config))
+            self.end_headers()
+            self.wfile.write(config.encode())
+            return
+        super().do_GET()
 
     def end_headers(self):
         # CORS headers for local dev

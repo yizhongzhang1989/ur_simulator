@@ -12,6 +12,7 @@
   <exec_depend>std_msgs</exec_depend>
   <exec_depend>trajectory_msgs</exec_depend>
   <exec_depend>pinocchio</exec_depend>
+  <exec_depend>mujoco_ros2_control</exec_depend>
   <export>
     <build_type>ament_cmake</build_type>
   </export>

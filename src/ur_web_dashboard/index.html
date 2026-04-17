@@ -219,9 +219,18 @@
         import URDFLoader from 'urdf-loader';
 
         // ============================================================
-        // Configuration
+        // Configuration — fetched from server at /config.json
         // ============================================================
-        const ROSBRIDGE_URL = `ws://${location.hostname}:9090`;
+        let ROSBRIDGE_URL = `ws://${location.hostname}:9090`;  // fallback
+        async function loadConfig() {
+            try {
+                const resp = await fetch('/config.json');
+                if (resp.ok) {
+                    const cfg = await resp.json();
+                    ROSBRIDGE_URL = cfg.rosbridge_url || `ws://${location.hostname}:${cfg.rosbridge_port}`;
+                }
+            } catch(e) { /* use fallback */ }
+        }
         const JOINT_NAMES = [
             'shoulder_pan_joint', 'shoulder_lift_joint', 'elbow_joint',
             'wrist_1_joint', 'wrist_2_joint', 'wrist_3_joint'
@@ -660,7 +669,7 @@
             return `<tr><td>${name}</td><td>${rad2deg(js.position)}</td><td>0.0000</td><td>0.0000</td></tr>`;
         }).join('');
         loadURDF(detectedType);
-        connect();
+        loadConfig().then(() => connect());
     </script>
 </body>
 </html>
