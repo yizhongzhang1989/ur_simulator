@@ -181,7 +181,7 @@ echo "Press Ctrl+C to stop all services."
 echo ""
 
 cd "$WS_DIR/src/ur_web_dashboard"
-python3 server.py "$DASHBOARD_PORT" &
+python3 server.py "$DASHBOARD_PORT" "$ROSBRIDGE_PORT" &
 WEB_PID=$!
 
 # Cleanup on exit
