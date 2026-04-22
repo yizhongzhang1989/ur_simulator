@@ -1,0 +1,23 @@
+[smoke] log dir: /tmp/ur_smoke.PsK9cl
+[smoke] pre-checks
+  PASS  env.ros2_present 
+  PASS  env.ws_built 
+  PASS  urdf.ur_sim_xacro_installed 
+[smoke] cleaning up...
+[smoke] starting stack: simulator=mujoco control_mode=effort
+[smoke] launch_all.sh pid=577933
+  FAIL  boot.joint_states_publishing timed out after 45s; see /tmp/ur_smoke.PsK9cl/launch.log
+[launch] === UR Robot Simulator ===
+[launch] Config:       /home/robot/Documents/ur_simulator/config/config.yaml
+[launch] Robot type:   ur15
+[launch] Simulator:    mujoco
+[launch] Control mode: effort
+[launch] Gazebo GUI:   false
+[launch] World:        /home/robot/Documents/ur_simulator/src/ur_web_dashboard/worlds/no_ground_collision.sdf
+[launch] Ports:        dashboard=8200, rosbridge=8201
+[launch] 
+[launch] [1/4] Cleaning up old processes...
+[launch] Terminated
+RESULT: FAIL
+CHECKS: pass=3 fail=1
+[smoke] cleaning up...

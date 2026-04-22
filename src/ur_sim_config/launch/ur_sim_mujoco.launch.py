@@ -37,8 +37,10 @@ def launch_setup(context, *args, **kwargs):
 
     pkg_share = FindPackageShare("ur_sim_config").perform(context)
 
-    # --- Generate MJCF model (shared for all control modes since we always use motor actuators) ---
-    mjcf_dir = os.path.join(pkg_share, "mujoco", ur_type)
+    # --- Generate MJCF model per-(ur_type, control_mode) ---
+    # Different control modes need different actuator types (motor for effort,
+    # position for position), so scenes live in separate directories.
+    mjcf_dir = os.path.join(pkg_share, "mujoco", ur_type, control_mode)
     scene_file = os.path.join(mjcf_dir, "ur_scene.xml")
 
     if not os.path.exists(scene_file):
@@ -53,38 +55,28 @@ def launch_setup(context, *args, **kwargs):
             raise RuntimeError("MJCF generation failed")
         print(f"[MuJoCo] MJCF generated: {scene_file}")
 
-    # --- Build URDF with MuJoCo hardware interface ---
-    # Generate a clean URDF for robot_state_publisher (TF tree)
-    ur_desc_dir = subprocess.check_output(
-        ["ros2", "pkg", "prefix", "ur_description"],
-        text=True
-    ).strip()
-    xacro_file = os.path.join(ur_desc_dir, "share", "ur_description", "urdf", "ur.urdf.xacro")
+    # --- Build URDF via unified xacro (R5) ---
+    # Replaces the previous inline regex/string-builder pipeline. Upstream
+    # ur_description geometry is included via ur_macro.xacro with
+    # generate_ros2_control_tag:=false, and ur_sim_config appends the
+    # MuJoCo-specific <ros2_control> block.
+    xacro_file = os.path.join(pkg_share, "urdf", "ur_sim.urdf.xacro")
 
-    # Generate the URDF with ros2_control block pointing to MuJoCo
-    robot_description_content = subprocess.check_output(
-        ["xacro", xacro_file, f"ur_type:={ur_type}", "name:=ur"],
-        text=True
-    )
-
-    # Inject MuJoCo ros2_control block into the URDF
-    mujoco_ros2_control_block = _build_ros2_control_block(
-        scene_file, control_mode, headless
-    )
-
-    # Replace any existing ros2_control block or insert before </robot>
-    import re
-    robot_description_content = re.sub(
-        r'<ros2_control.*?</ros2_control>',
-        mujoco_ros2_control_block,
-        robot_description_content,
-        flags=re.DOTALL,
-    )
-    if '<ros2_control' not in robot_description_content:
-        robot_description_content = robot_description_content.replace(
-            '</robot>',
-            mujoco_ros2_control_block + '\n</robot>'
-        )
+    xacro_args = [
+        "xacro", xacro_file,
+        f"ur_type:={ur_type}",
+        "name:=ur",
+        "simulator:=mujoco",
+        f"control_mode:={control_mode}",
+        f"mjcf_model:={scene_file}",
+        f"headless:={headless}",
+        f"controllers_file:={controllers_file_cfg}",
+        f"safety_limits:={LaunchConfiguration('safety_limits').perform(context)}",
+        f"safety_pos_margin:={LaunchConfiguration('safety_pos_margin').perform(context)}",
+        f"safety_k_position:={LaunchConfiguration('safety_k_position').perform(context)}",
+        f"tf_prefix:={LaunchConfiguration('tf_prefix').perform(context)}",
+    ]
+    robot_description_content = subprocess.check_output(xacro_args, text=True)
 
     robot_description = {
         "robot_description": ParameterValue(
@@ -162,23 +154,34 @@ def launch_setup(context, *args, **kwargs):
         condition=IfCondition(launch_rviz),
     )
 
-    # Spawn joint_trajectory_controller as inactive
-    joint_traj_controller_spawner = Node(
-        package="controller_manager",
-        executable="spawner",
-        arguments=["joint_trajectory_controller", "-c", "/controller_manager", "--inactive"],
-    )
-
-    # MuJoCo always uses motor (effort) actuators. Both position and effort
-    # modes use the same effort interface with gravity compensation.
-    # In position mode, joint_trajectory_controller is active and sends
-    # trajectories handled by the gravity_compensation node.
-    # In effort mode, external controllers publish to /external_effort_commands.
+    # Controller activation is mode-dependent:
+    #   position mode -> JTC active (MuJoCo <position> actuators handle gravity
+    #                    implicitly; gravity_compensation.py is NOT started).
+    #   effort mode   -> forward_effort_controller active + gravity_compensation.py.
+    position_mode = (control_mode == "position")
 
     effort_controller_spawner = Node(
         package="controller_manager",
         executable="spawner",
-        arguments=["forward_effort_controller", "-c", "/controller_manager"],
+        arguments=[
+            "forward_effort_controller", "-c", "/controller_manager",
+            *(["--inactive"] if position_mode else []),
+        ],
+    )
+
+    joint_traj_controller_spawner = Node(
+        package="controller_manager",
+        executable="spawner",
+        arguments=[
+            "joint_trajectory_controller", "-c", "/controller_manager",
+            *([] if position_mode else ["--inactive"]),
+        ],
+    )
+
+    scaled_joint_traj_controller_spawner = Node(
+        package="controller_manager",
+        executable="spawner",
+        arguments=["scaled_joint_trajectory_controller", "-c", "/controller_manager", "--inactive"],
     )
 
     forward_position_controller_spawner = Node(
@@ -192,13 +195,28 @@ def launch_setup(context, *args, **kwargs):
         arguments=["forward_velocity_controller", "-c", "/controller_manager", "--inactive"],
     )
 
-    # Gravity compensation (Pinocchio) — always runs in MuJoCo
+    # Gravity compensation (Pinocchio) — only started in effort mode.
+    # In position mode, MuJoCo <position> actuators handle gravity implicitly.
+    _tf_prefix = LaunchConfiguration("tf_prefix").perform(context)
     gravity_compensation_node = Node(
         package="ur_sim_config",
         executable="gravity_compensation.py",
         name="gravity_compensation",
         output="screen",
-        parameters=[{"use_sim_time": True}, robot_description],
+        parameters=[
+            {"use_sim_time": True, "ur_type": ur_type, "tf_prefix": _tf_prefix},
+            robot_description,
+        ],
+    )
+
+    # Upstream UR driver topic-parity shim (R3). Provides speed_scaling,
+    # wrench, tcp_pose, robot/safety mode, program_running, io_states.
+    sim_broadcasters_node = Node(
+        package="ur_sim_config",
+        executable="sim_broadcasters.py",
+        name="sim_broadcasters",
+        output="log",
+        parameters=[{"use_sim_time": True, "tf_prefix": _tf_prefix}],
     )
 
     delay_gravity_comp = RegisterEventHandler(
@@ -208,52 +226,30 @@ def launch_setup(context, *args, **kwargs):
         ),
     )
 
-    return [
+    nodes = [
         robot_state_publisher_node,
         control_node,
         joint_state_broadcaster_spawner,
         delay_rviz_after_joint_state_broadcaster_spawner,
         joint_traj_controller_spawner,
+        scaled_joint_traj_controller_spawner,
         effort_controller_spawner,
         forward_position_controller_spawner,
         forward_velocity_controller_spawner,
-        delay_gravity_comp,
+        sim_broadcasters_node,
     ]
+    if not position_mode:
+        nodes.append(delay_gravity_comp)
+    return nodes
 
 
-def _build_ros2_control_block(scene_file, control_mode, headless):
-    """Build the ros2_control XML block for MuJoCo."""
-    joints_xml = ""
-    joint_names = [
-        "shoulder_pan_joint", "shoulder_lift_joint", "elbow_joint",
-        "wrist_1_joint", "wrist_2_joint", "wrist_3_joint",
-    ]
-    initial_positions = [0.0, -1.57, 0.0, -1.57, 0.0, 0.0]
-
-    for name, init_pos in zip(joint_names, initial_positions):
-        # Expose both position and effort command interfaces (like real UR driver)
-        joints_xml += f"""
-    <joint name="{name}">
-      <command_interface name="position"/>
-      <command_interface name="effort"/>
-      <state_interface name="position">
-        <param name="initial_value">{init_pos}</param>
-      </state_interface>
-      <state_interface name="velocity"/>
-      <state_interface name="effort"/>
-    </joint>"""
-
-    return f"""
-  <ros2_control name="MujocoSystem" type="system">
-    <hardware>
-      <plugin>mujoco_ros2_control/MujocoSystemInterface</plugin>
-      <param name="mujoco_model">{scene_file}</param>
-      <param name="headless">{headless}</param>
-      <param name="sim_speed_factor">1.0</param>
-      <param name="initial_keyframe">home</param>
-    </hardware>
-{joints_xml}
-  </ros2_control>"""
+def _build_ros2_control_block(*_, **__):
+    # Retained only to avoid breaking any external import; R5 moved the
+    # <ros2_control> block into urdf/ur_sim.urdf.xacro.
+    raise NotImplementedError(
+        "R5 moved the ros2_control block into urdf/ur_sim.urdf.xacro; "
+        "call the xacro directly instead."
+    )
 
 
 def generate_launch_description():
@@ -277,6 +273,11 @@ def generate_launch_description():
                 [FindPackageShare("ur_sim_config"), "config", "ur_effort_controllers.yaml"]
             ),
         ),
+        # R5: forward upstream safety_limits knobs into the xacro.
+        DeclareLaunchArgument("safety_limits",     default_value="false"),
+        DeclareLaunchArgument("safety_pos_margin", default_value="0.15"),
+        DeclareLaunchArgument("safety_k_position", default_value="20"),
+        DeclareLaunchArgument("tf_prefix",         default_value=""),
     ]
 
     return LaunchDescription(

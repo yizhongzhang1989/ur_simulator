@@ -1,0 +1,8 @@
+# UR5 / UR5e / UR7e
+effort_limits:
+  shoulder_pan_joint:  150.0
+  shoulder_lift_joint: 150.0
+  elbow_joint:         150.0
+  wrist_1_joint:       28.0
+  wrist_2_joint:       28.0
+  wrist_3_joint:       28.0

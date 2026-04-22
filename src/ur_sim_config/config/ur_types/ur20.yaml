@@ -1,0 +1,8 @@
+# UR20
+effort_limits:
+  shoulder_pan_joint:  740.0
+  shoulder_lift_joint: 740.0
+  elbow_joint:         370.0
+  wrist_1_joint:       100.0
+  wrist_2_joint:       100.0
+  wrist_3_joint:       100.0
