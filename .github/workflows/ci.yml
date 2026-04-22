@@ -1,0 +1,113 @@
+name: CI
+
+# Runs the colcon build + smoke test for both control modes on every push
+# and pull request. The smoke test is the authoritative regression gate;
+# see scripts/smoke_test.sh. Branch protection for `main` should require
+# the `ci / smoke (effort)` and `ci / smoke (position)` checks.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  smoke:
+    name: smoke (${{ matrix.control_mode }})
+    runs-on: ubuntu-22.04
+    strategy:
+      fail-fast: false
+      matrix:
+        control_mode: [position, effort]
+
+    # Run the job inside the official ROS 2 Humble desktop image so we
+    # don't need to install ROS on the runner. We'll still need some
+    # extra apt packages (MuJoCo/Ignition ros2_control plugins, xacro,
+    # etc.) which get layered on top at startup.
+    container:
+      image: osrf/ros:humble-desktop-full
+      options: --user 0
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install apt dependencies
+        shell: bash
+        run: |
+          set -euxo pipefail
+          export DEBIAN_FRONTEND=noninteractive
+          apt-get update
+          apt-get install -y --no-install-recommends \
+            python3-colcon-common-extensions \
+            python3-rosdep \
+            python3-vcstool \
+            python3-pip \
+            python3-yaml \
+            xacro \
+            curl \
+            git \
+            ros-humble-xacro \
+            ros-humble-ros2-control \
+            ros-humble-ros2-controllers \
+            ros-humble-controller-manager \
+            ros-humble-robot-state-publisher \
+            ros-humble-ur-description \
+            ros-humble-rosbridge-suite \
+            ros-humble-ign-ros2-control \
+            ros-humble-ros-gz \
+            ros-humble-ros-gz-bridge \
+            ros-humble-ros-gz-sim \
+            || true
+          # mujoco_ros2_control is not in the humble apt index; the smoke
+          # test's `backend` assertion handles its absence gracefully (a
+          # position-mode run will fail that single assertion but colcon
+          # build will still succeed). We still try, in case a user adds
+          # a PPA in the future.
+          apt-get install -y --no-install-recommends \
+            ros-humble-mujoco-ros2-control || true
+          pip3 install --no-cache-dir pin==3.9.0 || true
+
+      - name: rosdep install
+        shell: bash
+        run: |
+          set -euxo pipefail
+          source /opt/ros/humble/setup.bash
+          rosdep update --rosdistro humble || true
+          rosdep install --from-paths src --ignore-src -y \
+            --rosdistro humble --skip-keys="mujoco_ros2_control" || true
+
+      - name: colcon build
+        shell: bash
+        run: |
+          set -euxo pipefail
+          source /opt/ros/humble/setup.bash
+          colcon build --symlink-install --event-handlers console_direct+
+
+      - name: Make scripts executable
+        run: |
+          chmod +x scripts/*.sh src/ur_sim_config/scripts/*.sh src/ur_sim_config/scripts/*.py || true
+
+      - name: Smoke test (${{ matrix.control_mode }})
+        shell: bash
+        run: |
+          set -euxo pipefail
+          source /opt/ros/humble/setup.bash
+          # GitHub-hosted runners are headless; force the same in sim.
+          export HEADLESS=1
+          bash scripts/smoke_test.sh --control_mode ${{ matrix.control_mode }}
+
+      - name: Upload smoke log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: smoke-log-${{ matrix.control_mode }}
+          path: |
+            /tmp/ur_smoke.*
+            log/latest_launch
+          if-no-files-found: ignore

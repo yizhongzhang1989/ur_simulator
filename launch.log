@@ -1,0 +1,157 @@
+=== UR Robot Simulator ===
+Config:       /home/robot/Documents/ur_simulator/config/config.yaml
+Robot type:   ur15
+Simulator:    mujoco
+Control mode: position
+Gazebo GUI:   false
+World:        /home/robot/Documents/ur_simulator/src/ur_web_dashboard/worlds/no_ground_collision.sdf
+Ports:        dashboard=8200, rosbridge=8201
+
+[1/4] Cleaning up old processes...
+[2/4] Static URDFs already exist, skipping generation.
+[3/4] Starting mujoco simulation (position mode)...
+    Waiting for /joint_states topic...
+[INFO] [launch]: All log files can be found below /home/robot/.ros/log/2026-04-22-09-57-27-840507-msraig-ubuntu-4-528437
+[INFO] [launch]: Default logging verbosity is set to INFO
+[INFO] [ros2_control_node-2]: process started with pid [528557]
+[INFO] [robot_state_publisher-1]: process started with pid [528555]
+[INFO] [spawner-3]: process started with pid [528559]
+[INFO] [spawner-4]: process started with pid [528561]
+[INFO] [spawner-5]: process started with pid [528563]
+[INFO] [spawner-6]: process started with pid [528565]
+[INFO] [spawner-7]: process started with pid [528567]
+[ros2_control_node-2] [0m[INFO] [1776823048.310315918] [controller_manager]: Subscribing to '~/robot_description' topic for robot description file.[0m
+[ros2_control_node-2] [0m[INFO] [1776823048.310929533] [controller_manager]: update rate is 500 Hz[0m
+[ros2_control_node-2] [0m[INFO] [1776823048.310954368] [controller_manager]: Overruns handling is : enabled[0m
+[ros2_control_node-2] [0m[INFO] [1776823048.310962558] [controller_manager]: Spawning controller_manager RT thread with scheduler priority: 50[0m
+[ros2_control_node-2] [33m[WARN] [1776823048.311039179] [controller_manager]: Could not enable FIFO RT scheduling policy: with error number <1>(Operation not permitted). See [https://control.ros.org/master/doc/ros2_control/controller_manager/doc/userdoc.html] for details on how to enable realtime scheduling.[0m
+[robot_state_publisher-1] [INFO] [1776823048.336875288] [robot_state_publisher]: got segment base
+[robot_state_publisher-1] [INFO] [1776823048.336999889] [robot_state_publisher]: got segment base_link
+[robot_state_publisher-1] [INFO] [1776823048.337009669] [robot_state_publisher]: got segment base_link_inertia
+[robot_state_publisher-1] [INFO] [1776823048.337015662] [robot_state_publisher]: got segment flange
+[robot_state_publisher-1] [INFO] [1776823048.337021143] [robot_state_publisher]: got segment forearm_link
+[robot_state_publisher-1] [INFO] [1776823048.337026382] [robot_state_publisher]: got segment ft_frame
+[robot_state_publisher-1] [INFO] [1776823048.337031344] [robot_state_publisher]: got segment shoulder_link
+[robot_state_publisher-1] [INFO] [1776823048.337036139] [robot_state_publisher]: got segment tool0
+[robot_state_publisher-1] [INFO] [1776823048.337041137] [robot_state_publisher]: got segment upper_arm_link
+[robot_state_publisher-1] [INFO] [1776823048.337046947] [robot_state_publisher]: got segment world
+[robot_state_publisher-1] [INFO] [1776823048.337052789] [robot_state_publisher]: got segment wrist_1_link
+[robot_state_publisher-1] [INFO] [1776823048.337057899] [robot_state_publisher]: got segment wrist_2_link
+[robot_state_publisher-1] [INFO] [1776823048.337062978] [robot_state_publisher]: got segment wrist_3_link
+[ros2_control_node-2] [0m[INFO] [1776823048.337369367] [controller_manager]: Received robot description file.[0m
+[ros2_control_node-2] [0m[INFO] [1776823048.337652741] [resource_manager]: Loading hardware 'MujocoSystem' [0m
+[ros2_control_node-2] [0m[INFO] [1776823048.340977955] [resource_manager]: Initialize hardware 'MujocoSystem' [0m
+[ros2_control_node-2] [0m[INFO] [1776823048.341060782] [MujocoSystemInterface]: Loading 'mujoco_model' from: '/home/robot/Documents/ur_simulator/install/ur_sim_config/share/ur_sim_config/mujoco/ur15/ur_scene.xml'[0m
+[ros2_control_node-2] [0m[INFO] [1776823048.341078097] [MujocoSystemInterface]: Running the simulation at 100.00 percent speed[0m
+[ros2_control_node-2] [0m[INFO] [1776823048.341090610] [MujocoSystemInterface]: Running in HEADLESS mode.[0m
+[ros2_control_node-2] [0m[INFO] [1776823048.341095751] [MujocoSystemInterface]: Scanning plugin libraries...[0m
+[ros2_control_node-2] [0m[INFO] [1776823048.341158639] [MujocoSystemInterface]: Initializing simulation...[0m
+[ros2_control_node-2] [0m[INFO] [1776823048.345357448] [MujocoSystemInterface]: Sim ready, continuing initialization...[0m
+[ros2_control_node-2] [0m[INFO] [1776823048.345381432] [MujocoSystemInterface]: Constructing node and executor...[0m
+[ros2_control_node-2] [0m[INFO] [1776823048.348656738] [MujocoSystemInterface]: Executor thread started.[0m
+[ros2_control_node-2] [0m[INFO] [1776823048.348676233] [MujocoSystemInterface]: Loading model...[0m
+[ros2_control_node-2] [0m[INFO] [1776823048.378760554] [MujocoSystemInterface]: Constructing publishers.[0m
+[ros2_control_node-2] [0m[INFO] [1776823048.380565211] [MujocoSystemInterface]: Registering actuators.[0m
+[ros2_control_node-2] [0m[INFO] [1776823048.380595330] [MujocoSystemInterface]: override_start_position_file not passed. Loading initial positions from ros2_control xacro.[0m
+[ros2_control_node-2] [0m[INFO] [1776823048.380601785] [MujocoSystemInterface]: Registering MuJoCo actuator 'shoulder_pan_joint' for joint 'shoulder_pan_joint'[0m
+[ros2_control_node-2] [0m[INFO] [1776823048.383090634] [MujocoSystemInterface]: Registering MuJoCo actuator 'shoulder_lift_joint' for joint 'shoulder_lift_joint'[0m
+[ros2_control_node-2] [0m[INFO] [1776823048.384122910] [MujocoSystemInterface]: Registering MuJoCo actuator 'elbow_joint' for joint 'elbow_joint'[0m
+[ros2_control_node-2] [0m[INFO] [1776823048.385107693] [MujocoSystemInterface]: Registering MuJoCo actuator 'wrist_1_joint' for joint 'wrist_1_joint'[0m
+[ros2_control_node-2] [0m[INFO] [1776823048.386064701] [MujocoSystemInterface]: Registering MuJoCo actuator 'wrist_2_joint' for joint 'wrist_2_joint'[0m
+[ros2_control_node-2] [0m[INFO] [1776823048.386959083] [MujocoSystemInterface]: Registering MuJoCo actuator 'wrist_3_joint' for joint 'wrist_3_joint'[0m
+[ros2_control_node-2] [0m[INFO] [1776823048.387801837] [MujocoSystemInterface]: Applying initial keyframe: 'home'[0m
+[ros2_control_node-2] [0m[INFO] [1776823048.387834694] [MujocoSystemInterface]: Registering joints and sensors.[0m
+[ros2_control_node-2] [0m[INFO] [1776823048.387841379] [MujocoSystemInterface]: Registering joints...[0m
+[ros2_control_node-2] [0m[INFO] [1776823048.387861567] [MujocoSystemInterface]: Using MuJoCo motor or custom actuator for the joint : 'shoulder_pan_joint'[0m
+[ros2_control_node-2] [0m[INFO] [1776823048.387869010] [MujocoSystemInterface]: Using MuJoCo motor or custom actuator for the joint : 'shoulder_lift_joint'[0m
+[ros2_control_node-2] [0m[INFO] [1776823048.387879153] [MujocoSystemInterface]: Using MuJoCo motor or custom actuator for the joint : 'elbow_joint'[0m
+[ros2_control_node-2] [0m[INFO] [1776823048.387884980] [MujocoSystemInterface]: Using MuJoCo motor or custom actuator for the joint : 'wrist_1_joint'[0m
+[ros2_control_node-2] [0m[INFO] [1776823048.387890262] [MujocoSystemInterface]: Using MuJoCo motor or custom actuator for the joint : 'wrist_2_joint'[0m
+[ros2_control_node-2] [0m[INFO] [1776823048.387897847] [MujocoSystemInterface]: Using MuJoCo motor or custom actuator for the joint : 'wrist_3_joint'[0m
+[ros2_control_node-2] [0m[INFO] [1776823048.388463493] [MujocoSystemInterface]: Created reset_world service at: /mujoco_ros2_control_node/reset_world[0m
+[ros2_control_node-2] [0m[INFO] [1776823048.388476011] [MujocoSystemInterface]: Initializing cameras...[0m
+[ros2_control_node-2] [0m[INFO] [1776823048.388521604] [MujocoSystemInterface]: Initializing lidar...[0m
+[ros2_control_node-2] [0m[INFO] [1776823048.388589668] [MujocoSystemInterface]: Starting the MuJoCo physics thread...[0m
+[ros2_control_node-2] [0m[INFO] [1776823048.388711622] [MujocoSystemInterface]: No 'mujoco_plugins' parameter found![0m
+[ros2_control_node-2] [0m[INFO] [1776823048.388719749] [MujocoSystemInterface]: on_init complete.[0m
+[ros2_control_node-2] [0m[INFO] [1776823048.388743878] [resource_manager]: Successful initialization of hardware 'MujocoSystem'[0m
+[ros2_control_node-2] [0m[INFO] [1776823048.388806643] [resource_manager]: 'configure' hardware 'MujocoSystem' [0m
+[ros2_control_node-2] [0m[INFO] [1776823048.388814527] [resource_manager]: Successful 'configure' of hardware 'MujocoSystem'[0m
+[ros2_control_node-2] [0m[INFO] [1776823048.388823084] [resource_manager]: 'activate' hardware 'MujocoSystem' [0m
+[ros2_control_node-2] [0m[INFO] [1776823048.388827545] [MujocoSystemInterface]: Activating MuJoCo hardware interface and starting Simulate threads...[0m
+[ros2_control_node-2] [0m[INFO] [1776823048.397258360] [resource_manager]: Successful 'activate' of hardware 'MujocoSystem'[0m
+[ros2_control_node-2] [0m[INFO] [1776823048.397299237] [mujoco_ros2_control_node]: Starting the lidar processing loop, publishing at 5 Hz[0m
+[ros2_control_node-2] [0m[INFO] [1776823048.723746772] [controller_manager]: Loading controller 'joint_state_broadcaster'[0m
+[spawner-5] [INFO] [1776823048.726256038] [spawner_forward_effort_controller]: waiting for service /controller_manager/list_controllers to become available...
+[ros2_control_node-2] [0m[INFO] [1776823048.731748704] [controller_manager]: Loading controller 'forward_effort_controller'[0m
+[spawner-5] [INFO] [1776823048.739950518] [spawner_forward_effort_controller]: [94mLoaded [1mforward_effort_controller[0m
+[ros2_control_node-2] [0m[INFO] [1776823048.740679115] [controller_manager]: Configuring controller 'forward_effort_controller'[0m
+[ros2_control_node-2] [0m[INFO] [1776823048.741178595] [forward_effort_controller]: configure successful[0m
+[spawner-3] [INFO] [1776823048.744812606] [spawner_joint_state_broadcaster]: [94mLoaded [1mjoint_state_broadcaster[0m
+[ros2_control_node-2] [0m[INFO] [1776823048.745469236] [MujocoSystemInterface]: Joint shoulder_pan_joint: effort control enabled (position, velocity disabled)[0m
+[ros2_control_node-2] [0m[INFO] [1776823048.745491947] [MujocoSystemInterface]: Joint shoulder_lift_joint: effort control enabled (position, velocity disabled)[0m
+[ros2_control_node-2] [0m[INFO] [1776823048.745502850] [MujocoSystemInterface]: Joint elbow_joint: effort control enabled (position, velocity disabled)[0m
+[ros2_control_node-2] [0m[INFO] [1776823048.745507134] [MujocoSystemInterface]: Joint wrist_1_joint: effort control enabled (position, velocity disabled)[0m
+[ros2_control_node-2] [0m[INFO] [1776823048.745511180] [MujocoSystemInterface]: Joint wrist_2_joint: effort control enabled (position, velocity disabled)[0m
+[ros2_control_node-2] [0m[INFO] [1776823048.745515307] [MujocoSystemInterface]: Joint wrist_3_joint: effort control enabled (position, velocity disabled)[0m
+[ros2_control_node-2] [0m[INFO] [1776823048.745556494] [forward_effort_controller]: activate successful[0m
+[ros2_control_node-2] [0m[INFO] [1776823048.747797179] [controller_manager]: Configuring controller 'joint_state_broadcaster'[0m
+[ros2_control_node-2] [0m[INFO] [1776823048.747855045] [joint_state_broadcaster]: 'joints' or 'interfaces' parameter is empty. All available state interfaces will be published[0m
+[spawner-5] [INFO] [1776823048.748354102] [spawner_forward_effort_controller]: [92mConfigured and activated [1mforward_effort_controller[0m
+[ros2_control_node-2] [0m[INFO] [1776823048.750097889] [controller_manager]: Loading controller 'joint_trajectory_controller'[0m
+[ros2_control_node-2] [33m[WARN] [1776823048.757654408] [joint_trajectory_controller]: [Deprecated]: "allow_nonzero_velocity_at_trajectory_end" is set to true. The default behavior will change to false.[0m
+[spawner-3] [INFO] [1776823048.763571783] [spawner_joint_state_broadcaster]: [92mConfigured and activated [1mjoint_state_broadcaster[0m
+[spawner-4] [INFO] [1776823048.772877871] [spawner_joint_trajectory_controller]: [94mLoaded [1mjoint_trajectory_controller[0m
+[ros2_control_node-2] [0m[INFO] [1776823048.773776283] [controller_manager]: Configuring controller 'joint_trajectory_controller'[0m
+[ros2_control_node-2] [0m[INFO] [1776823048.773941953] [joint_trajectory_controller]: No specific joint names are used for command interfaces. Using 'joints' parameter.[0m
+[ros2_control_node-2] [0m[INFO] [1776823048.773963091] [joint_trajectory_controller]: Command interfaces are [position] and state interfaces are [position velocity].[0m
+[ros2_control_node-2] [0m[INFO] [1776823048.773985789] [joint_trajectory_controller]: Using 'splines' interpolation method.[0m
+[ros2_control_node-2] [0m[INFO] [1776823048.774624210] [joint_trajectory_controller]: Controller state will be published at 100.00 Hz.[0m
+[ros2_control_node-2] [0m[INFO] [1776823048.775883633] [joint_trajectory_controller]: Action status changes will be monitored at 20.00 Hz.[0m
+[ros2_control_node-2] [0m[INFO] [1776823048.778949209] [mujoco_ros2_control_node]: Initializing rendering for cameras[0m
+[ros2_control_node-2] [0m[INFO] [1776823048.779118407] [mujoco_ros2_control_node]: Starting the camera rendering loop, publishing at 5.000000 Hz[0m
+[ros2_control_node-2] [0m[INFO] [1776823048.784123499] [controller_manager]: Loading controller 'forward_velocity_controller'[0m
+[ros2_control_node-2] [0m[INFO] [1776823048.804110858] [mujoco_ros2_control_node]: Resized offscreen buffer to 1 x 1[0m
+[spawner-7] [INFO] [1776823048.805243049] [spawner_forward_velocity_controller]: [94mLoaded [1mforward_velocity_controller[0m
+[ros2_control_node-2] [0m[INFO] [1776823048.806150934] [controller_manager]: Configuring controller 'forward_velocity_controller'[0m
+[ros2_control_node-2] [0m[INFO] [1776823048.806593241] [forward_velocity_controller]: configure successful[0m
+[INFO] [spawner-5]: process has finished cleanly [pid 528563]
+[INFO] [spawner-3]: process has finished cleanly [pid 528559]
+[INFO] [spawner-4]: process has finished cleanly [pid 528561]
+[INFO] [gravity_compensation.py-8]: process started with pid [529009]
+[INFO] [spawner-7]: process has finished cleanly [pid 528567]
+[gravity_compensation.py-8] [INFO] [1776823049.373757262] [gravity_compensation]: Pinocchio model: 6 DOF, 7 joints
+[gravity_compensation.py-8] [INFO] [1776823049.378685694] [gravity_compensation]: Gravity compensation active (500 Hz)
+    Simulation ready.
+[4/4] Starting rosbridge WebSocket (port 8201)...
+[ros2_control_node-2] [0m[INFO] [1776823049.422065351] [controller_manager]: Loading controller 'forward_position_controller'[0m
+[spawner-6] [INFO] [1776823049.443144612] [spawner_forward_position_controller]: [94mLoaded [1mforward_position_controller[0m
+[ros2_control_node-2] [0m[INFO] [1776823049.443935628] [controller_manager]: Configuring controller 'forward_position_controller'[0m
+[ros2_control_node-2] [0m[INFO] [1776823049.444406130] [forward_position_controller]: configure successful[0m
+[INFO] [spawner-6]: process has finished cleanly [pid 528565]
+[INFO] [launch]: All log files can be found below /home/robot/.ros/log/2026-04-22-09-57-29-641715-msraig-ubuntu-4-529103
+[INFO] [launch]: Default logging verbosity is set to INFO
+[INFO] [rosbridge_websocket-1]: process started with pid [529106]
+[INFO] [rosapi_node-2]: process started with pid [529108]
+[rosbridge_websocket-1] [WARN] [1776823050.201725097] [rosbridge_websocket]: The 'default_call_service_timeout' parameter is currently set to 0.0, which means service calls will block indefinitely if no response is received. Please note that in the Jazzy and later releases, the default value for this parameter will be updated to 5.0 seconds.
+[rosbridge_websocket-1] [WARN] [1776823050.202070031] [rosbridge_websocket]: The 'call_services_in_new_thread' parameter is currently set to False, which means service calls will block the main thread. Please note that in the Jazzy and later releases, the default value for this parameter will be updated to True.
+[rosbridge_websocket-1] [WARN] [1776823050.202348847] [rosbridge_websocket]: The 'send_action_goals_in_new_thread' parameter is currently set to False, which means sending action goals will block the main thread. Please note that in the Jazzy and later releases, the default value for this parameter will be updated to True.
+[rosbridge_websocket-1] [INFO] [1776823050.203326166] [rosbridge_websocket]: Rosbridge WebSocket server started on port 8201
+[rosbridge_websocket-1] [INFO] [1776823050.982281056] [rosbridge_websocket]: Calling services in existing thread
+[rosbridge_websocket-1] [INFO] [1776823050.982700318] [rosbridge_websocket]: Sending action goals in existing thread
+[rosbridge_websocket-1] [INFO] [1776823050.983494849] [rosbridge_websocket]: Client connected. 1 clients total.
+[rosbridge_websocket-1] [INFO] [1776823051.028256255] [rosbridge_websocket]: [Client 3f0fc40c-ff2f-4fed-9e6b-ee2af71572b3] Subscribed to /joint_states
+[rosbridge_websocket-1] [INFO] [1776823051.030825135] [rosbridge_websocket]: [Client 3f0fc40c-ff2f-4fed-9e6b-ee2af71572b3] Subscribed to /clock
+
+=== Starting web dashboard on port 8200 ===
+
+Open in browser: http://localhost:8200
+rosbridge WebSocket: ws://localhost:8201
+
+Press Ctrl+C to stop all services.
+
+
+Shutting down...
+Done.
+
+Shutting down...

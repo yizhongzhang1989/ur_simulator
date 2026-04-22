@@ -19,6 +19,7 @@ This node:
 
 import tempfile
 import os
+import sys
 
 import rclpy
 from rclpy.node import Node
@@ -27,6 +28,14 @@ from std_msgs.msg import Float64MultiArray
 from trajectory_msgs.msg import JointTrajectory
 import pinocchio
 import numpy as np
+
+# Allow `from ur_type_loader import load_ur_type` when invoked as an entry
+# point from lib/ur_sim_config (sibling script in the same directory).
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+try:
+    from ur_type_loader import load_ur_type
+except ImportError:
+    load_ur_type = None
 
 
 JOINT_NAMES = [
@@ -38,8 +47,12 @@ JOINT_NAMES = [
     "wrist_3_joint",
 ]
 
-# Default UR home position (matches initial_positions.yaml)
-HOME_POSITIONS = [0.0, -1.57, 0.0, -1.57, 0.0, 0.0]
+# Fallback UR5e-ish defaults if per-ur_type config can't be loaded (legacy path).
+_FALLBACK_HOME = [0.0, -1.57, 0.0, -1.57, 0.0, 0.0]
+_FALLBACK_KP   = [100.0, 100.0, 100.0, 20.0, 20.0, 20.0]
+_FALLBACK_KI   = [10.0,  10.0,  10.0,   5.0,  5.0,  5.0]
+_FALLBACK_KD   = [20.0,  20.0,  20.0,   3.0,  3.0,  3.0]
+_FALLBACK_EFF  = [150.0, 150.0, 150.0, 28.0, 28.0, 28.0]
 
 
 class GravityCompensation(Node):
@@ -48,15 +61,31 @@ class GravityCompensation(Node):
 
         # Get robot description
         self.declare_parameter("robot_description", "")
+        self.declare_parameter("ur_type", "ur5e")
+        self.declare_parameter("tf_prefix", "")
         urdf_str = (
             self.get_parameter("robot_description")
             .get_parameter_value()
             .string_value
         )
+        ur_type = (
+            self.get_parameter("ur_type").get_parameter_value().string_value
+            or "ur5e"
+        )
+        self._tf_prefix = (
+            self.get_parameter("tf_prefix").get_parameter_value().string_value
+            or ""
+        )
+        # Joint names in the URDF + topic streams include the tf_prefix.
+        self._joint_names = [f"{self._tf_prefix}{n}" for n in JOINT_NAMES]
 
         if not urdf_str:
             self.get_logger().error("No robot_description parameter provided.")
             raise RuntimeError("Missing robot_description")
+
+        # Resolve per-ur_type constants (R4). Fall back to UR5e-ish hardcoded
+        # values if the loader or config file is unavailable.
+        self._load_ur_type_config(ur_type)
 
         # Build Pinocchio model from URDF string
         # Write to temp file since pinocchio.buildModelFromXML may not be available
@@ -71,9 +100,9 @@ class GravityCompensation(Node):
 
         self.data = self.model.createData()
 
-        # Find indices of the 6 UR joints in the Pinocchio model
+        # Find indices of the 6 UR joints in the Pinocchio model (respect tf_prefix).
         self.pin_joint_ids = []
-        for name in JOINT_NAMES:
+        for name in self._joint_names:
             if self.model.existJointName(name):
                 self.pin_joint_ids.append(self.model.getJointId(name))
             else:
@@ -91,7 +120,7 @@ class GravityCompensation(Node):
         self.got_joint_states = False
 
         # Position hold: lock to home position initially
-        self.hold_positions = list(HOME_POSITIONS)
+        self.hold_positions = list(self._home_positions)
         self.hold_initialized = True
         self.external_active = False
 
@@ -101,15 +130,6 @@ class GravityCompensation(Node):
         self.traj_duration = 0.0
         self.traj_start_time = None
         self.traj_active = False
-
-        # Per-joint PID gains for position hold (mimics real UR servo stiffness)
-        # Pinocchio handles gravity accurately, so PID only corrects residual error
-        self.kp = [100.0, 100.0, 100.0, 20.0, 20.0, 20.0]
-        self.ki = [10.0,  10.0,  10.0,  5.0,  5.0,  5.0]
-        self.kd = [20.0,  20.0,  20.0,  3.0,  3.0,  3.0]
-
-        # Per-joint effort limits (matching real UR hardware)
-        self.effort_limits = [150.0, 150.0, 150.0, 28.0, 28.0, 28.0]
 
         # Integral error accumulator
         self.integral_error = [0.0] * self.n_joints
@@ -140,11 +160,40 @@ class GravityCompensation(Node):
 
         # Publish at 500 Hz
         self.create_timer(self.dt, self._publish_torques)
-        self.get_logger().info("Gravity compensation active (500 Hz)")
+        self.get_logger().info(
+            f"Gravity compensation active (500 Hz), ur_type={ur_type}, "
+            f"effort_limits={self.effort_limits}"
+        )
+
+    def _load_ur_type_config(self, ur_type):
+        cfg = None
+        if load_ur_type is not None:
+            try:
+                cfg = load_ur_type(ur_type)
+            except Exception as exc:
+                self.get_logger().warn(
+                    f"Falling back to UR5e defaults: cannot load "
+                    f"ur_type='{ur_type}' config ({exc})"
+                )
+        if cfg:
+            eff = cfg["effort_limits"]
+            home = cfg["home_positions"]
+            pid = cfg["pid_hold"]
+            self.effort_limits = [float(eff[n]) for n in JOINT_NAMES]
+            self._home_positions = [float(home[n]) for n in JOINT_NAMES]
+            self.kp = [float(pid[n]["p"]) for n in JOINT_NAMES]
+            self.ki = [float(pid[n]["i"]) for n in JOINT_NAMES]
+            self.kd = [float(pid[n]["d"]) for n in JOINT_NAMES]
+        else:
+            self.effort_limits = list(_FALLBACK_EFF)
+            self._home_positions = list(_FALLBACK_HOME)
+            self.kp = list(_FALLBACK_KP)
+            self.ki = list(_FALLBACK_KI)
+            self.kd = list(_FALLBACK_KD)
 
     def _joint_state_cb(self, msg):
         alpha = 0.3  # low-pass filter coefficient for velocity
-        for i, name in enumerate(JOINT_NAMES):
+        for i, name in enumerate(self._joint_names):
             if name in msg.name:
                 idx = msg.name.index(name)
                 self.joint_positions[i] = msg.position[idx]
@@ -180,15 +229,15 @@ class GravityCompensation(Node):
             # Map by joint_names
             target = list(self.hold_positions)
             for i, name in enumerate(msg.joint_names):
-                if name in JOINT_NAMES:
-                    idx = JOINT_NAMES.index(name)
+                if name in self._joint_names:
+                    idx = self._joint_names.index(name)
                     target[idx] = last_point.positions[i]
         else:
-            # Reorder to match JOINT_NAMES
+            # Reorder to match self._joint_names
             target = [0.0] * self.n_joints
             for i, name in enumerate(msg.joint_names):
-                if name in JOINT_NAMES:
-                    idx = JOINT_NAMES.index(name)
+                if name in self._joint_names:
+                    idx = self._joint_names.index(name)
                     target[idx] = last_point.positions[i]
 
         duration = (last_point.time_from_start.sec

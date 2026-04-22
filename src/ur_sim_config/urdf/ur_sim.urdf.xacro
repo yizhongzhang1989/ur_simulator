@@ -1,0 +1,147 @@
+<?xml version="1.0"?>
+<!--
+  UR simulator unified URDF xacro.
+
+  Replaces:
+    - src/ur_sim_config/urdf/generate_effort_urdf.sh (sed pipeline)
+    - the inline `_build_ros2_control_block` regex builder in
+      launch/ur_sim_mujoco.launch.py
+
+  Emits a single URDF for either the MuJoCo backend or the Gazebo/Ignition
+  backend, with the right `<ros2_control>` block and hardware plugin, at the
+  requested control_mode (position or effort).
+
+  Typical invocation (via xacro CLI, or launch `Command(["xacro", ...])`):
+
+    xacro ur_sim.urdf.xacro \
+       ur_type:=ur5e \
+       name:=ur \
+       simulator:=mujoco            # mujoco | ignition
+       control_mode:=effort         # position | effort
+       controllers_file:=/abs/path/to/controllers.yaml \
+       mjcf_model:=/abs/path/to/ur_scene.xml \    # mujoco only
+       headless:=false \
+       tf_prefix:= \
+       safety_limits:=false \
+       safety_pos_margin:=0.15 \
+       safety_k_position:=20
+-->
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro" name="$(arg name)">
+
+  <!-- Basic identity / upstream-compatibility args -->
+  <xacro:arg name="name"      default="ur"/>
+  <xacro:arg name="ur_type"   default="ur5e"/>
+  <xacro:arg name="tf_prefix" default=""/>
+
+  <!-- Backend selector: mujoco or ignition. "gazebo" (Classic) is unsupported. -->
+  <xacro:arg name="simulator"    default="mujoco"/>
+  <xacro:arg name="control_mode" default="effort"/>
+
+  <!-- Controllers YAML passed into the ros2_control plugin. -->
+  <xacro:arg name="controllers_file" default=""/>
+
+  <!-- MuJoCo-specific. -->
+  <xacro:arg name="mjcf_model" default=""/>
+  <xacro:arg name="headless"   default="false"/>
+
+  <!-- Upstream safety_limits knobs (forwarded to ur_robot macro). -->
+  <xacro:arg name="safety_limits"     default="false"/>
+  <xacro:arg name="safety_pos_margin" default="0.15"/>
+  <xacro:arg name="safety_k_position" default="20"/>
+
+  <!-- Kinematic / limit YAMLs from ur_description. -->
+  <xacro:arg name="joint_limit_params"
+             default="$(find ur_description)/config/$(arg ur_type)/joint_limits.yaml"/>
+  <xacro:arg name="kinematics_params"
+             default="$(find ur_description)/config/$(arg ur_type)/default_kinematics.yaml"/>
+  <xacro:arg name="physical_params"
+             default="$(find ur_description)/config/$(arg ur_type)/physical_parameters.yaml"/>
+  <xacro:arg name="visual_params"
+             default="$(find ur_description)/config/$(arg ur_type)/visual_parameters.yaml"/>
+
+  <xacro:property name="simulator"    value="$(arg simulator)"/>
+  <xacro:property name="control_mode" value="$(arg control_mode)"/>
+  <xacro:property name="mjcf_model"   value="$(arg mjcf_model)"/>
+  <xacro:property name="headless"     value="$(arg headless)"/>
+  <xacro:property name="controllers_file" value="$(arg controllers_file)"/>
+  <xacro:property name="tf_prefix"    value="$(arg tf_prefix)"/>
+
+  <!-- === Geometry & kinematics (upstream) === -->
+  <xacro:include filename="$(find ur_description)/urdf/ur_macro.xacro"/>
+
+  <link name="world"/>
+
+  <xacro:ur_robot
+    name="$(arg name)"
+    tf_prefix="$(arg tf_prefix)"
+    parent="world"
+    joint_limits_parameters_file="$(arg joint_limit_params)"
+    kinematics_parameters_file="$(arg kinematics_params)"
+    physical_parameters_file="$(arg physical_params)"
+    visual_parameters_file="$(arg visual_params)"
+    safety_limits="$(arg safety_limits)"
+    safety_pos_margin="$(arg safety_pos_margin)"
+    safety_k_position="$(arg safety_k_position)"
+    generate_ros2_control_tag="false">
+    <origin xyz="0 0 0" rpy="0 0 0"/>
+  </xacro:ur_robot>
+
+  <!-- === ros2_control block (sim-specific) === -->
+
+  <xacro:macro name="ur_sim_joint"
+               params="name initial_position:=0.0 include_effort:=true">
+    <joint name="${tf_prefix}${name}">
+      <command_interface name="position"/>
+      <command_interface name="velocity"/>
+      <xacro:if value="${include_effort}">
+        <command_interface name="effort"/>
+      </xacro:if>
+      <state_interface name="position">
+        <param name="initial_value">${initial_position}</param>
+      </state_interface>
+      <state_interface name="velocity"/>
+      <state_interface name="effort"/>
+    </joint>
+  </xacro:macro>
+
+  <xacro:if value="${simulator == 'mujoco'}">
+    <ros2_control name="MujocoSystem" type="system">
+      <hardware>
+        <plugin>mujoco_ros2_control/MujocoSystemInterface</plugin>
+        <param name="mujoco_model">${mjcf_model}</param>
+        <param name="headless">${headless}</param>
+        <param name="sim_speed_factor">1.0</param>
+        <param name="initial_keyframe">home</param>
+      </hardware>
+      <xacro:ur_sim_joint name="shoulder_pan_joint"  initial_position="0.0"   include_effort="true"/>
+      <xacro:ur_sim_joint name="shoulder_lift_joint" initial_position="-1.57" include_effort="true"/>
+      <xacro:ur_sim_joint name="elbow_joint"         initial_position="0.0"   include_effort="true"/>
+      <xacro:ur_sim_joint name="wrist_1_joint"       initial_position="-1.57" include_effort="true"/>
+      <xacro:ur_sim_joint name="wrist_2_joint"       initial_position="0.0"   include_effort="true"/>
+      <xacro:ur_sim_joint name="wrist_3_joint"       initial_position="0.0"   include_effort="true"/>
+    </ros2_control>
+  </xacro:if>
+
+  <xacro:if value="${simulator == 'ignition'}">
+    <ros2_control name="GazeboSimSystem" type="system">
+      <hardware>
+        <plugin>ign_ros2_control/IgnitionSystem</plugin>
+        <param name="position_proportional_gain">5000</param>
+      </hardware>
+      <xacro:ur_sim_joint name="shoulder_pan_joint"  initial_position="0.0"   include_effort="true"/>
+      <xacro:ur_sim_joint name="shoulder_lift_joint" initial_position="-1.57" include_effort="true"/>
+      <xacro:ur_sim_joint name="elbow_joint"         initial_position="0.0"   include_effort="true"/>
+      <xacro:ur_sim_joint name="wrist_1_joint"       initial_position="-1.57" include_effort="true"/>
+      <xacro:ur_sim_joint name="wrist_2_joint"       initial_position="0.0"   include_effort="true"/>
+      <xacro:ur_sim_joint name="wrist_3_joint"       initial_position="0.0"   include_effort="true"/>
+    </ros2_control>
+
+    <gazebo>
+      <plugin filename="ign_ros2_control-system" name="ign_ros2_control::IgnitionROS2ControlPlugin">
+        <parameters>${controllers_file}</parameters>
+        <controller_manager_node_name>controller_manager</controller_manager_node_name>
+      </plugin>
+    </gazebo>
+  </xacro:if>
+
+</robot>

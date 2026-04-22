@@ -51,96 +51,89 @@ if [ ! -f "$MJCF_RAW" ]; then
     exit 1
 fi
 
-# MuJoCo always uses motor actuators (effort control) regardless of control_mode.
-# Position control is handled by the ros2_control stack (gravity_compensation +
-# joint_trajectory_controller), same as the Gazebo effort mode.
+# Resolve per-ur_type effort limits from config/ur_types/<ur_type>.yaml
+# (Falls back to UR5e-ish values if the loader can't find the file.)
+eff_limits_file="$OUTPUT_DIR/effort_limits.env"
+PKG_SHARE="$(ros2 pkg prefix ur_sim_config)/share/ur_sim_config"
+python3 - "$PKG_SHARE" "$UR_TYPE" > "$eff_limits_file" << 'PYEOF'
+import os, sys, yaml
+share, ur_type = sys.argv[1], sys.argv[2]
+cfg_dir = os.path.join(share, "config", "ur_types")
+joints = ["shoulder_pan_joint", "shoulder_lift_joint", "elbow_joint",
+          "wrist_1_joint", "wrist_2_joint", "wrist_3_joint"]
+defaults = {"shoulder_pan_joint": 150, "shoulder_lift_joint": 150,
+            "elbow_joint": 150, "wrist_1_joint": 28,
+            "wrist_2_joint": 28, "wrist_3_joint": 28}
+eff = dict(defaults)
+path = os.path.join(cfg_dir, f"{ur_type}.yaml")
+try:
+    with open(path) as f:
+        doc = yaml.safe_load(f) or {}
+    override = doc.get("effort_limits", {}) or {}
+    eff.update({k: float(v) for k, v in override.items()})
+except Exception as exc:
+    sys.stderr.write(f"[mjcf] warn: ur_type config {path} not loaded: {exc}\n")
+for j in joints:
+    print(f"EFF_{j.upper()}={eff[j]}")
+PYEOF
+# shellcheck disable=SC1090
+source "$eff_limits_file"
+
+# Actuator generation is control_mode-aware:
+#   effort  -> motor actuators (ctrl = joint torque). Paired with the
+#              gravity_compensation.py node + forward_effort_controller.
+#   position -> built-in PD position actuators (MuJoCo handles gravity
+#              implicitly; joint_trajectory_controller drives ctrl directly).
 ACTUATOR_FILE="$OUTPUT_DIR/actuators.xml"
-cat > "$ACTUATOR_FILE" << 'EOF'
+if [ "$CONTROL_MODE" = "position" ]; then
+    # Shortcoming #15 fix: previous kp=2000/500 with kv=100/25 was
+    # numerically unstable under MuJoCo's default explicit RK4 when a
+    # step-shaped command arrived via forward_position_controller.
+    # Mitigation:
+    #   * raise damping ratio (kv closer to 2*sqrt(kp*I)) so over-shoot
+    #     decays instead of ringing,
+    #   * add forcerange to clamp torques at the joint's effort limit so
+    #     a single bad step can no longer launch the wrist to 400 rad,
+    #   * rely on the 'implicitfast' integrator (set in ur_scene.xml)
+    #     for stable stiff actuator integration.
+    cat > "$ACTUATOR_FILE" << EOF
   <actuator>
-    <motor name="shoulder_pan_joint" joint="shoulder_pan_joint" ctrlrange="-150 150"/>
-    <motor name="shoulder_lift_joint" joint="shoulder_lift_joint" ctrlrange="-150 150"/>
-    <motor name="elbow_joint" joint="elbow_joint" ctrlrange="-150 150"/>
-    <motor name="wrist_1_joint" joint="wrist_1_joint" ctrlrange="-28 28"/>
-    <motor name="wrist_2_joint" joint="wrist_2_joint" ctrlrange="-28 28"/>
-    <motor name="wrist_3_joint" joint="wrist_3_joint" ctrlrange="-28 28"/>
+    <position name="shoulder_pan_joint"  joint="shoulder_pan_joint"  kp="1500" kv="200" ctrlrange="-6.2832 6.2832" forcerange="-${EFF_SHOULDER_PAN_JOINT} ${EFF_SHOULDER_PAN_JOINT}"/>
+    <position name="shoulder_lift_joint" joint="shoulder_lift_joint" kp="1500" kv="200" ctrlrange="-6.2832 6.2832" forcerange="-${EFF_SHOULDER_LIFT_JOINT} ${EFF_SHOULDER_LIFT_JOINT}"/>
+    <position name="elbow_joint"         joint="elbow_joint"         kp="1000" kv="120" ctrlrange="-3.1416 3.1416" forcerange="-${EFF_ELBOW_JOINT} ${EFF_ELBOW_JOINT}"/>
+    <position name="wrist_1_joint"       joint="wrist_1_joint"       kp="300"  kv="40"  ctrlrange="-6.2832 6.2832" forcerange="-${EFF_WRIST_1_JOINT} ${EFF_WRIST_1_JOINT}"/>
+    <position name="wrist_2_joint"       joint="wrist_2_joint"       kp="300"  kv="40"  ctrlrange="-6.2832 6.2832" forcerange="-${EFF_WRIST_2_JOINT} ${EFF_WRIST_2_JOINT}"/>
+    <position name="wrist_3_joint"       joint="wrist_3_joint"       kp="300"  kv="40"  ctrlrange="-6.2832 6.2832" forcerange="-${EFF_WRIST_3_JOINT} ${EFF_WRIST_3_JOINT}"/>
   </actuator>
 EOF
+else
+    cat > "$ACTUATOR_FILE" << EOF
+  <actuator>
+    <motor name="shoulder_pan_joint"  joint="shoulder_pan_joint"  ctrlrange="-${EFF_SHOULDER_PAN_JOINT} ${EFF_SHOULDER_PAN_JOINT}"/>
+    <motor name="shoulder_lift_joint" joint="shoulder_lift_joint" ctrlrange="-${EFF_SHOULDER_LIFT_JOINT} ${EFF_SHOULDER_LIFT_JOINT}"/>
+    <motor name="elbow_joint"         joint="elbow_joint"         ctrlrange="-${EFF_ELBOW_JOINT} ${EFF_ELBOW_JOINT}"/>
+    <motor name="wrist_1_joint"       joint="wrist_1_joint"       ctrlrange="-${EFF_WRIST_1_JOINT} ${EFF_WRIST_1_JOINT}"/>
+    <motor name="wrist_2_joint"       joint="wrist_2_joint"       ctrlrange="-${EFF_WRIST_2_JOINT} ${EFF_WRIST_2_JOINT}"/>
+    <motor name="wrist_3_joint"       joint="wrist_3_joint"       ctrlrange="-${EFF_WRIST_3_JOINT} ${EFF_WRIST_3_JOINT}"/>
+  </actuator>
+EOF
+fi
 
-# Add actuators and joint friction/damping to the robot MJCF using python
-python3 - "$MJCF_RAW" "$ACTUATOR_FILE" "$CONTROL_MODE" << 'PYEOF'
-import sys
-import re
-
-mjcf_path, actuator_path, control_mode = sys.argv[1], sys.argv[2], sys.argv[3]
-
-with open(mjcf_path) as f:
-    xml = f.read()
-
-with open(actuator_path) as f:
-    actuators = f.read()
-
-# Insert actuators before closing </mujoco>
-xml = xml.replace('</mujoco>', actuators + '\n</mujoco>')
-
-# Fix shoulder_link body orientation: MuJoCo's URDF compiler fuses the
-# base_link->base_link_inertia fixed joint (rpy="0 0 pi") into shoulder_link,
-# giving it quat="0 0 0 1" (180 deg around Z). This makes shoulder_pan_joint
-# visually appear to not rotate. Remove the spurious rotation.
-# Also fix any geom/inertial quats that were set to "0 0 0 1" for same reason.
-xml = xml.replace(
-    '<body name="shoulder_link" pos="0 0 0.1625" quat="0 0 0 1">',
-    '<body name="shoulder_link" pos="0 0 0.1625">'
-)
-# Fix shoulder geom quat (also inherited the Rz(pi))
-xml = re.sub(
-    r'(<geom\s+)quat="0 0 0 1"(\s+type="mesh"\s+mesh="shoulder"/>)',
-    r'\1\2',
-    xml
-)
-# Fix base geom quat
-xml = re.sub(
-    r'(<geom\s+pos="0 0 0"\s+)quat="-1 0 0 0"(\s+type="mesh"\s+mesh="base"/>)',
-    r'\1\2',
-    xml
-)
-
-# Remove actuatorfrcrange from joints — these are set by MuJoCo's URDF compiler
-# from URDF effort limits. However they conflict with motor actuator ctrlrange.
-xml = re.sub(r'\s*actuatorfrcrange="[^"]*"', '', xml)
-
-# Disable collisions on all mesh geoms — UR meshes overlap at joints by design
-# (they are visual-only in the real URDF). Without this, adjacent link meshes
-# collide and prevent joints from rotating.
-xml = re.sub(
-    r'type="mesh"',
-    'type="mesh" contype="0" conaffinity="0"',
-    xml
-)
-
-# Add friction and damping to joints (simulating reduction gear friction)
-base_joints = ['shoulder_pan_joint', 'shoulder_lift_joint', 'elbow_joint']
-wrist_joints = ['wrist_1_joint', 'wrist_2_joint', 'wrist_3_joint']
-for joint in base_joints:
-    xml = xml.replace(
-        f'joint name="{joint}"',
-        f'joint name="{joint}" frictionloss="5" damping="10"'
-    )
-for joint in wrist_joints:
-    xml = xml.replace(
-        f'joint name="{joint}"',
-        f'joint name="{joint}" frictionloss="1" damping="3"'
-    )
-
-with open(mjcf_path, 'w') as f:
-    f.write(xml)
-
-print(f"  Patched: actuators ({control_mode}), friction, damping, shoulder_link quat fix")
-PYEOF
+# Post-process MJCF (R6): apply the known hacks as labeled, removable
+# transforms in scripts/mjcf_postprocess.py rather than inline regex here.
+MJCF_POSTPROCESS="$(dirname "$0")/mjcf_postprocess.py"
+if [ ! -x "$MJCF_POSTPROCESS" ]; then
+    # Installed layout: same directory as this script under lib/ur_sim_config.
+    MJCF_POSTPROCESS="$(ros2 pkg prefix ur_sim_config)/lib/ur_sim_config/mjcf_postprocess.py"
+fi
+python3 "$MJCF_POSTPROCESS" "$MJCF_RAW" "$ACTUATOR_FILE" "$CONTROL_MODE"
 
 # Create the scene file that includes the robot
 cat > "$OUTPUT_DIR/ur_scene.xml" << 'SCENE_EOF'
 <mujoco model="ur_scene">
-  <option gravity="0 0 -9.81" timestep="0.001"/>
+  <!-- integrator="implicitfast" is stable with stiff <position> actuators
+       at timestep=0.001; the default (RK4) diverges (shortcoming #15). -->
+  <option gravity="0 0 -9.81" timestep="0.001" integrator="implicitfast"/>
 
   <include file="ur_robot.xml"/>
 

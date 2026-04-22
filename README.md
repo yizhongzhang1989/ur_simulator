@@ -1,5 +1,7 @@
 # UR Robot Simulator
 
+[![CI](https://github.com/OWNER/REPO/actions/workflows/ci.yml/badge.svg)](https://github.com/OWNER/REPO/actions/workflows/ci.yml)
+
 A ROS 2 simulation environment for Universal Robots (UR3, UR5e, UR10e, UR16e, UR20, etc.) with a web-based monitoring dashboard. Designed for evaluating control systems in a virtual environment before deploying to real hardware.
 
 <!-- AI Quick Reference
@@ -116,17 +118,24 @@ ros2 topic echo /joint_states --once   # Should show 6 joint positions
 ros2 control list_controllers          # Should list active controllers
 ```
 
-Expected controllers by mode:
+Expected controllers by mode (all are *loaded*; columns show which are *active*
+on startup — any other loaded controller is available for runtime switching
+via `ros2 control switch_controllers`):
 
-| Mode | Active Controllers |
-|---|---|
-| MuJoCo (any) | `joint_state_broadcaster`, `forward_effort_controller` + 3 inactive |
-| Gazebo position | `joint_state_broadcaster`, `joint_trajectory_controller` |
-| Gazebo effort | `joint_state_broadcaster`, `forward_effort_controller` + 3 inactive |
+| Mode                     | Active                                                                    | Inactive (loaded, switchable)                                                                                              |
+|--------------------------|---------------------------------------------------------------------------|----------------------------------------------------------------------------------------------------------------------------|
+| MuJoCo (any)             | `joint_state_broadcaster`, `forward_effort_controller`                    | `joint_trajectory_controller`, `scaled_joint_trajectory_controller`, `forward_position_controller`, `forward_velocity_controller` |
+| Gazebo position          | `joint_state_broadcaster`, `joint_trajectory_controller`                  | `scaled_joint_trajectory_controller`, `forward_position_controller`, `forward_velocity_controller`, `forward_effort_controller`    |
+| Gazebo effort            | `joint_state_broadcaster`, `forward_effort_controller`                    | `joint_trajectory_controller`, `scaled_joint_trajectory_controller`, `forward_position_controller`, `forward_velocity_controller` |
 
 > **Note:** MuJoCo always runs in effort mode internally (motor actuators + gravity
 > compensation via Pinocchio). The `--control_mode` flag only affects which
 > controllers are active in Gazebo.
+>
+> `scaled_joint_trajectory_controller` is loaded for parity with the real UR
+> driver (MoveIt2 defaults to it on hardware). It has an empty
+> `speed_scaling_interface_name` and falls back to plain JTC behavior until
+> Round 3 wires a speed-scaling state interface.
 
 ## Configuration
 
@@ -174,7 +183,12 @@ If no flags are given, MuJoCo with position mode is used by default.
 ### Position Mode (default)
 
 - Launches the simulation with robust position control using the `joint_trajectory_controller`.
-- Effort (torque) commands are **not** available.
+- On **MuJoCo**, backed by MuJoCo built-in `<position>` actuators — gravity is
+  handled implicitly by the physics engine, no gravity-compensation node is
+  started.
+- On **Gazebo**, backed by the Ignition position command interface.
+- Effort (torque) commands are **not** active in this mode (but the effort
+  controller is loaded; you can switch to it via `ros2 control switch_controllers`).
 - Use this mode for most applications, including web dashboard jogging and trajectory following.
 
 ### Effort Mode (for CRISP/external controllers)
@@ -319,7 +333,7 @@ cd src/ur_web_dashboard && python3 server.py 8000
 │   │   ├── launch/ur_sim_effort.launch.py   # Gazebo effort mode
 │   │   ├── launch/ur_sim_mujoco.launch.py   # MuJoCo (any mode)
 │   │   ├── mujoco/                          # Generated MJCF (auto, gitignored)
-│   │   └── urdf/generate_effort_urdf.sh     # Gazebo URDF patcher
+│   │   └── urdf/ur_sim.urdf.xacro           # Unified URDF xacro (mujoco|ignition)
 │   ├── ur_simulation_gz/          # Git submodule: UR Gazebo sim
 │   └── ur_web_dashboard/
 │       ├── index.html             # Dashboard app

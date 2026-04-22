@@ -1,0 +1,33 @@
+# UR-type-dependent constants. Loaded by:
+#   - ur_sim_config/scripts/gravity_compensation.py
+#   - ur_sim_config/scripts/generate_mujoco_model.sh
+#   - ur_sim_config/launch/ur_sim_mujoco.launch.py
+#
+# Keys:
+#   effort_limits:   per-joint torque limit [Nm] (matches real UR actuator capability).
+#   home_positions:  startup joint positions [rad] (matches URDF home pose).
+#   pid_hold:        PID gains used by gravity_compensation.py for position hold
+#                    (only used in effort mode; position mode uses MuJoCo <position>
+#                    actuators and ignores these).
+#
+# Naming & numbers aligned with:
+#   https://www.universal-robots.com/articles/ur/robot-care-maintenance/max-joint-torques/
+#
+# NOTE: effort_limits double as the MJCF motor <ctrlrange> bound and the
+# torque clamp inside gravity_compensation.py.
+
+defaults: &defaults
+  home_positions:
+    shoulder_pan_joint:  0.0
+    shoulder_lift_joint: -1.5707963
+    elbow_joint:         0.0
+    wrist_1_joint:       -1.5707963
+    wrist_2_joint:       0.0
+    wrist_3_joint:       0.0
+  pid_hold:
+    shoulder_pan_joint:  { p: 100.0, i: 10.0, d: 20.0 }
+    shoulder_lift_joint: { p: 100.0, i: 10.0, d: 20.0 }
+    elbow_joint:         { p: 100.0, i: 10.0, d: 20.0 }
+    wrist_1_joint:       { p:  20.0, i:  5.0, d:  3.0 }
+    wrist_2_joint:       { p:  20.0, i:  5.0, d:  3.0 }
+    wrist_3_joint:       { p:  20.0, i:  5.0, d:  3.0 }

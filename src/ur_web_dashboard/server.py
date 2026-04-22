@@ -8,6 +8,28 @@ PORT = int(sys.argv[1]) if len(sys.argv) > 1 else 8000
 ROSBRIDGE_PORT = int(sys.argv[2]) if len(sys.argv) > 2 else 9090
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 
+# Resolve the active control_mode so the dashboard can gate controller
+# switch buttons. Position mode exposes only position actuators in the
+# MuJoCo MJCF, so velocity / effort controllers either silently no-op
+# or refuse to activate; the dashboard should reflect that.
+def _detect_control_mode():
+    env = os.environ.get('UR_SIM_CONTROL_MODE')
+    if env:
+        return env
+    # Fall back to reading config/config.yaml.
+    ws = os.path.dirname(os.path.dirname(SCRIPT_DIR))
+    cfg = os.path.join(ws, 'config', 'config.yaml')
+    try:
+        with open(cfg) as f:
+            for line in f:
+                s = line.strip()
+                if s.startswith('control_mode:'):
+                    return s.split(':', 1)[1].strip().strip('"\'')
+    except Exception:
+        pass
+    return 'position'
+CONTROL_MODE = _detect_control_mode()
+
 # Resolve ur_description mesh directory: prefer system ROS package, fall back to submodule
 def _find_ur_description_dir():
     """Find ur_description share directory from system package or submodule."""
@@ -46,6 +68,7 @@ class URDashboardHandler(http.server.SimpleHTTPRequestHandler):
             config = json.dumps({
                 'rosbridge_port': ROSBRIDGE_PORT,
                 'rosbridge_url': f'ws://{self.headers.get("Host", "localhost").split(":")[0]}:{ROSBRIDGE_PORT}',
+                'control_mode': CONTROL_MODE,
             })
             self.send_response(200)
             self.send_header('Content-Type', 'application/json')

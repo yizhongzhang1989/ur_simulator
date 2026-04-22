@@ -32,6 +32,7 @@ def launch_setup(context, *args, **kwargs):
     safety_pos_margin = LaunchConfiguration("safety_pos_margin")
     safety_k_position = LaunchConfiguration("safety_k_position")
     prefix = LaunchConfiguration("prefix")
+    _prefix_str = prefix.perform(context)
     start_joint_controller = LaunchConfiguration("start_joint_controller")
     initial_joint_controller = LaunchConfiguration("initial_joint_controller")
     launch_rviz = LaunchConfiguration("launch_rviz")
@@ -46,20 +47,25 @@ def launch_setup(context, *args, **kwargs):
         [FindPackageShare("ur_description"), "rviz", "view_robot.rviz"]
     )
 
-    # Generate URDF with effort interfaces via our patch script
-    generate_script = PathJoinSubstitution(
-        [FindPackageShare("ur_sim_config"), "urdf", "generate_effort_urdf.sh"]
+    # R5: build URDF via unified xacro instead of the generate_effort_urdf.sh
+    # sed pipeline. The same xacro is used by the MuJoCo launch.
+    ur_sim_xacro = PathJoinSubstitution(
+        [FindPackageShare("ur_sim_config"), "urdf", "ur_sim.urdf.xacro"]
     )
 
     robot_description_content = Command(
         [
-            PathJoinSubstitution([FindExecutable(name="bash")]),
-            " ",
-            generate_script,
-            " ",
-            ur_type,
-            " ",
-            initial_joint_controllers,
+            PathJoinSubstitution([FindExecutable(name="xacro")]),
+            " ", ur_sim_xacro,
+            " ur_type:=", ur_type,
+            " name:=ur",
+            " simulator:=ignition",
+            " control_mode:=effort",
+            " controllers_file:=", initial_joint_controllers,
+            " safety_limits:=", safety_limits,
+            " safety_pos_margin:=", safety_pos_margin,
+            " safety_k_position:=", safety_k_position,
+            " tf_prefix:=", prefix,
         ]
     )
     robot_description = {
@@ -154,7 +160,9 @@ def launch_setup(context, *args, **kwargs):
         arguments=["forward_effort_controller", "-c", "/controller_manager"],
     )
 
-    # Spawn additional controllers as inactive (available for runtime switching)
+    # Spawn additional controllers as inactive (available for runtime switching).
+    # scaled_joint_trajectory_controller is loaded for upstream-driver parity:
+    # MoveIt2 defaults to it on real UR hardware.
     forward_position_controller_spawner = Node(
         package="controller_manager",
         executable="spawner",
@@ -165,6 +173,11 @@ def launch_setup(context, *args, **kwargs):
         executable="spawner",
         arguments=["forward_velocity_controller", "-c", "/controller_manager", "--inactive"],
     )
+    scaled_joint_traj_controller_spawner = Node(
+        package="controller_manager",
+        executable="spawner",
+        arguments=["scaled_joint_trajectory_controller", "-c", "/controller_manager", "--inactive"],
+    )
 
     # Gravity compensation node — mimics real UR internal gravity comp.
     # Starts after forward_effort_controller is ready.
@@ -173,7 +186,19 @@ def launch_setup(context, *args, **kwargs):
         executable="gravity_compensation.py",
         name="gravity_compensation",
         output="screen",
-        parameters=[{"use_sim_time": True}, robot_description],
+        parameters=[
+            {"use_sim_time": True, "ur_type": ur_type, "tf_prefix": _prefix_str},
+            robot_description,
+        ],
+    )
+
+    # Upstream UR driver topic-parity shim (R3).
+    sim_broadcasters_node = Node(
+        package="ur_sim_config",
+        executable="sim_broadcasters.py",
+        name="sim_broadcasters",
+        output="log",
+        parameters=[{"use_sim_time": True, "tf_prefix": _prefix_str}],
     )
 
     delay_gravity_comp_after_effort_controller = RegisterEventHandler(
@@ -188,6 +213,7 @@ def launch_setup(context, *args, **kwargs):
         joint_state_broadcaster_spawner,
         delay_rviz_after_joint_state_broadcaster_spawner,
         initial_joint_controller_spawner_stopped,
+        sim_broadcasters_node,
         initial_joint_controller_spawner_started,
         gz_spawn_entity,
         gz_launch_description_with_gui,
@@ -196,6 +222,7 @@ def launch_setup(context, *args, **kwargs):
         effort_controller_spawner,
         forward_position_controller_spawner,
         forward_velocity_controller_spawner,
+        scaled_joint_traj_controller_spawner,
         delay_gravity_comp_after_effort_controller,
     ]
 
