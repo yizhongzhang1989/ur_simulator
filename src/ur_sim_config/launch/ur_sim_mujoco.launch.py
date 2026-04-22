@@ -130,11 +130,35 @@ def launch_setup(context, *args, **kwargs):
         on_exit=Shutdown(),
     )
 
+    # Controller spawners.
+    #
+    # NOTE on startup serialisation: on Humble + FastRTPS, firing all spawners
+    # concurrently can overflow the RMW response queue, so the controller
+    # manager's reply to a ``load_controller`` call for one spawner is
+    # silently dropped. That spawner then retries the load 10 s later and
+    # hits a hard "A controller named X was already loaded" error because
+    # Humble's ``load_controller`` is not idempotent, which aborts the
+    # spawner and leaves its controller un-activated.
+    #
+    # To avoid this race we:
+    #   1. Start ``joint_state_broadcaster`` on its own so it has the CM's
+    #      full attention (it's the critical one for /joint_states, which
+    #      gates every downstream test and every consumer of robot state).
+    #   2. Use a longer ``--service-call-timeout`` on every spawner as
+    #      defence in depth.
+    #   3. Chain all other controller spawners off the JSB spawner's
+    #      OnProcessExit, so at most one spawner is ever talking to the CM.
+    _SPAWNER_TIMEOUT = ["--service-call-timeout", "30"]
+
     # Controller spawners
     joint_state_broadcaster_spawner = Node(
         package="controller_manager",
         executable="spawner",
-        arguments=["joint_state_broadcaster", "--controller-manager", "/controller_manager"],
+        arguments=[
+            "joint_state_broadcaster",
+            "--controller-manager", "/controller_manager",
+            *_SPAWNER_TIMEOUT,
+        ],
     )
 
     rviz_node = Node(
@@ -165,6 +189,7 @@ def launch_setup(context, *args, **kwargs):
         executable="spawner",
         arguments=[
             "forward_effort_controller", "-c", "/controller_manager",
+            *_SPAWNER_TIMEOUT,
             *(["--inactive"] if position_mode else []),
         ],
     )
@@ -174,6 +199,7 @@ def launch_setup(context, *args, **kwargs):
         executable="spawner",
         arguments=[
             "joint_trajectory_controller", "-c", "/controller_manager",
+            *_SPAWNER_TIMEOUT,
             *([] if position_mode else ["--inactive"]),
         ],
     )
@@ -181,18 +207,27 @@ def launch_setup(context, *args, **kwargs):
     scaled_joint_traj_controller_spawner = Node(
         package="controller_manager",
         executable="spawner",
-        arguments=["scaled_joint_trajectory_controller", "-c", "/controller_manager", "--inactive"],
+        arguments=[
+            "scaled_joint_trajectory_controller", "-c", "/controller_manager",
+            *_SPAWNER_TIMEOUT, "--inactive",
+        ],
     )
 
     forward_position_controller_spawner = Node(
         package="controller_manager",
         executable="spawner",
-        arguments=["forward_position_controller", "-c", "/controller_manager", "--inactive"],
+        arguments=[
+            "forward_position_controller", "-c", "/controller_manager",
+            *_SPAWNER_TIMEOUT, "--inactive",
+        ],
     )
     forward_velocity_controller_spawner = Node(
         package="controller_manager",
         executable="spawner",
-        arguments=["forward_velocity_controller", "-c", "/controller_manager", "--inactive"],
+        arguments=[
+            "forward_velocity_controller", "-c", "/controller_manager",
+            *_SPAWNER_TIMEOUT, "--inactive",
+        ],
     )
 
     # Gravity compensation (Pinocchio) — only started in effort mode.
@@ -226,16 +261,28 @@ def launch_setup(context, *args, **kwargs):
         ),
     )
 
-    nodes = [
-        robot_state_publisher_node,
-        control_node,
-        joint_state_broadcaster_spawner,
-        delay_rviz_after_joint_state_broadcaster_spawner,
+    # Chain the other controller spawners off the JSB spawner's exit to
+    # serialise startup (see startup-serialisation note above).
+    _other_spawners = [
         joint_traj_controller_spawner,
         scaled_joint_traj_controller_spawner,
         effort_controller_spawner,
         forward_position_controller_spawner,
         forward_velocity_controller_spawner,
+    ]
+    delay_other_spawners_after_jsb = RegisterEventHandler(
+        event_handler=OnProcessExit(
+            target_action=joint_state_broadcaster_spawner,
+            on_exit=_other_spawners,
+        ),
+    )
+
+    nodes = [
+        robot_state_publisher_node,
+        control_node,
+        joint_state_broadcaster_spawner,
+        delay_rviz_after_joint_state_broadcaster_spawner,
+        delay_other_spawners_after_jsb,
         sim_broadcasters_node,
     ]
     if not position_mode:
