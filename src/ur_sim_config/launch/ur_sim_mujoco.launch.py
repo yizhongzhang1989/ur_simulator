@@ -132,13 +132,13 @@ def launch_setup(context, *args, **kwargs):
 
     # Controller spawners.
     #
-    # NOTE on startup serialisation: on Humble + FastRTPS, firing all spawners
-    # concurrently can overflow the RMW response queue, so the controller
-    # manager's reply to a ``load_controller`` call for one spawner is
-    # silently dropped. That spawner then retries the load 10 s later and
-    # hits a hard "A controller named X was already loaded" error because
-    # Humble's ``load_controller`` is not idempotent, which aborts the
-    # spawner and leaves its controller un-activated.
+    # NOTE on startup serialisation: on Humble + FastRTPS, firing multiple
+    # spawners concurrently can overflow the RMW response queue, so the
+    # controller manager's reply to a ``load_controller`` call for one
+    # spawner is silently dropped. That spawner then retries the load
+    # 10 s later and hits a hard "A controller named X was already loaded"
+    # error because Humble's ``load_controller`` is not idempotent, which
+    # aborts the spawner and leaves its controller un-activated.
     #
     # To avoid this race we:
     #   1. Start ``joint_state_broadcaster`` on its own so it has the CM's
@@ -146,8 +146,9 @@ def launch_setup(context, *args, **kwargs):
     #      gates every downstream test and every consumer of robot state).
     #   2. Use a longer ``--service-call-timeout`` on every spawner as
     #      defence in depth.
-    #   3. Chain all other controller spawners off the JSB spawner's
-    #      OnProcessExit, so at most one spawner is ever talking to the CM.
+    #   3. Strictly serialise the remaining controller spawners — each is
+    #      chained off the previous spawner's OnProcessExit — so at most
+    #      one spawner is ever talking to the CM at any given time.
     _SPAWNER_TIMEOUT = ["--service-call-timeout", "30"]
 
     # Controller spawners
@@ -261,28 +262,40 @@ def launch_setup(context, *args, **kwargs):
         ),
     )
 
-    # Chain the other controller spawners off the JSB spawner's exit to
-    # serialise startup (see startup-serialisation note above).
-    _other_spawners = [
+    # Chain every remaining spawner strictly one-after-another off the
+    # previous spawner's exit. Firing them in a single batch (even just
+    # after JSB) still overflows the FastRTPS response queue on Humble
+    # because each spawner issues overlapping ``load_controller`` service
+    # calls, and the CM-side reply to one of them is silently dropped.
+    # That victim then retries 10 s later and crashes on
+    # "controller already loaded". Strict serialisation means at most
+    # one ``load_controller`` call is ever in flight.
+    _serial_chain = [
         joint_traj_controller_spawner,
         scaled_joint_traj_controller_spawner,
         effort_controller_spawner,
         forward_position_controller_spawner,
         forward_velocity_controller_spawner,
     ]
-    delay_other_spawners_after_jsb = RegisterEventHandler(
-        event_handler=OnProcessExit(
-            target_action=joint_state_broadcaster_spawner,
-            on_exit=_other_spawners,
-        ),
-    )
+    serial_handlers = []
+    _prev = joint_state_broadcaster_spawner
+    for _spawner in _serial_chain:
+        serial_handlers.append(
+            RegisterEventHandler(
+                event_handler=OnProcessExit(
+                    target_action=_prev,
+                    on_exit=[_spawner],
+                ),
+            )
+        )
+        _prev = _spawner
 
     nodes = [
         robot_state_publisher_node,
         control_node,
         joint_state_broadcaster_spawner,
         delay_rviz_after_joint_state_broadcaster_spawner,
-        delay_other_spawners_after_jsb,
+        *serial_handlers,
         sim_broadcasters_node,
     ]
     if not position_mode:
